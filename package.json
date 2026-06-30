@@ -1,0 +1,32 @@
+{
+  "name": "kanji-v1",
+  "version": "1.0.0",
+  "description": "Backend framework for Bun with Hono, DI, native ORM, Auth and SDK generation",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "build": "bun run build:all",
+    "build:all": "echo 'Not implemented yet'",
+    "test": "bun test",
+    "lint": "eslint \"packages/**/src/**/*.ts\" \"examples/**/src/**/*.ts\"",
+    "format": "prettier --write \"packages/**/*.ts\" \"examples/**/*.ts\""
+  },
+  "keywords": [
+    "hono",
+    "bun",
+    "orm",
+    "auth",
+    "sdk",
+    "type-safe",
+    "framework"
+  ],
+  "author": "David Sebastian Aguiar",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.0",
+  "devDependencies": {
+    "bun-types": "1.3.14",
+    "eslint": "10.6.0",
+    "prettier": "3.9.4",
+    "typescript": "6.0.3"
+  }
+}
