@@ -1,0 +1,22 @@
+{
+  "name": "@kanjijs/store",
+  "version": "1.0.0-alpha.1",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "mongodb": "^7.4.0",
+    "postgres": "^3.4.9",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependencies": {
+    "@kanjijs/core": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}
