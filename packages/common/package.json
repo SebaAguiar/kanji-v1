@@ -1,0 +1,14 @@
+{
+  "name": "@kanjijs/common",
+  "version": "1.0.0-alpha.1",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "peerDependencies": {
+    "typescript": "6.0.3"
+  }
+}
