@@ -21,6 +21,7 @@
 8. [Tier 2: Dependency Injection](#tier-2-dependency-injection)
 9. [Tier 3: HTTP Layer (Hono)](#tier-3-http-layer-hono)
 10. [Tier 4: Contract-First Development](#tier-4-contract-first-development)
+    - [Environment Variable Validation (Colocated Pattern)](#environment-variable-validation-colocated-pattern)
 11. [Tier 5: OpenAPI + SDK Generation](#tier-5-openapi--sdk-generation)
 12. [Tier 6: Native ORM Integration](#tier-6-native-orm-integration)
 13. [Tier 7: Multi-Database Support](#tier-7-multi-database-support)
@@ -1169,6 +1170,63 @@ create(c: Context) {
   ]
 }
 ```
+
+### Environment Variable Validation (Colocated Pattern)
+
+**Problem:** A central `env.ts` with a hand-maintained Zod schema is a second source of truth. A developer adding `JWT_SECRET` to `auth.module.ts` has to remember to also declare it in `env.ts` — and nothing enforces that. This drifts silently and fails at runtime, not at build time.
+
+**Solution:** Apply the same principle as Contracts — the schema lives **where the variable is used**, not in a separate registry.
+
+```typescript
+// packages/common/src/env.ts
+import { z } from 'zod';
+
+const cache = new Map<string, unknown>();
+const errors: string[] = [];
+
+export function env<T extends z.ZodTypeAny>(key: string, schema: T): z.infer<T> {
+  if (cache.has(key)) return cache.get(key) as z.infer<T>;
+
+  const result = schema.safeParse(process.env[key]);
+  if (!result.success) {
+    errors.push(`${key}: ${result.error.issues.map(i => i.message).join(', ')}`);
+    return undefined as any; // reported in aggregate, not thrown here
+  }
+  cache.set(key, result.data);
+  return result.data;
+}
+
+export function assertEnvValid(): void {
+  if (errors.length > 0) {
+    throw new Error(`❌ Invalid environment:\n${errors.map(e => `  - ${e}`).join('\n')}`);
+  }
+}
+```
+
+Usage — declared at the exact call site, no separate file to touch:
+
+```typescript
+// packages/auth/src/session.ts
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
+
+const jwtSecret = env('JWT_SECRET', z.string().min(32));
+```
+
+Because module imports execute their top-level code, every `env()` call registers itself as a side effect of the module graph being loaded. `main.ts` calls `assertEnvValid()` once, after all modules are imported and before the server starts listening — so missing/invalid variables fail fast, grouped into a single startup error, with zero manual bookkeeping.
+
+**Enforcement (defense in depth):**
+
+1. **Types** — `packages/common/src/env.d.ts` widens `process.env` values to `undefined`, so any direct `process.env.X` access fails type-checking. This is the primary guard: harder to bypass than a lint rule (survives destructuring, bracket access, aliasing).
+2. **ESLint** — `no-restricted-properties` on `process.env` gives fast in-editor feedback with a custom message pointing to `env()`. A secondary layer, not the sole guard — it's syntactic and can be bypassed (`const { env } = process`), so it should never be relied on alone.
+3. **CLI (`kanji env:check`)** — scans the built output (not just source) for raw `process.env` access and auto-generates `.env.example` from the registered `env()` calls, so the example file never drifts either.
+
+**Benefits:**
+
+1. **No second source of truth**: the schema declaration *is* the usage; there's nothing else to remember to update.
+2. **Fail fast, once**: all env errors surface together at boot, not one crash at a time in production.
+3. **Self-documenting**: `.env.example` generation comes for free from the same registrations.
+4. **Consistent with Contract-First**: same Zod-colocation philosophy already used for HTTP request/response validation, so there's only one pattern to learn.
 
 ---
 
