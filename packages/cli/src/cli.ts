@@ -380,4 +380,75 @@ program
     runDelegateCommand('tsc');
   });
 
+program
+  .command('openapi:generate')
+  .description('Generate OpenAPI 3.0.0 specification from application routes')
+  .option('--entry <entry>', 'Application entry file (e.g. src/main.ts or dist/main.js)', 'src/main.ts')
+  .option('--output <output>', 'Path to write the generated JSON spec', 'openapi.json')
+  .action(async (options: { entry: string; output: string }) => {
+    const entryPath = join(process.cwd(), options.entry);
+    const outputPath = join(process.cwd(), options.output);
+
+    console.log(pc.cyan(`Bootstrapping application from ${options.entry} to scan routes...`));
+    
+    process.env.KANJI_GENERATE_ONLY = 'true';
+
+    try {
+      if (!(await fileExists(entryPath))) {
+        console.error(pc.red(`Error: Entry file not found at ${options.entry}`));
+        process.exit(1);
+      }
+
+      await import(entryPath);
+
+      const { OpenApiGenerator } = await import('@kanjijs/openapi');
+      const generator = new OpenApiGenerator();
+      
+      console.log(pc.cyan('Generating OpenAPI specification...'));
+      await generator.generateToFile(outputPath);
+
+      console.log(pc.bold(pc.green(`\nOpenAPI specification successfully generated at "${options.output}"! 📄`)));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(pc.red(`Error generating OpenAPI spec: ${msg}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('sdk:generate')
+  .description('Generate TypeScript client SDK from OpenAPI spec')
+  .option('--spec <spec>', 'Path to the OpenAPI JSON specification', 'openapi.json')
+  .option('--output <output>', 'Path to write the generated TypeScript client', 'src/sdk.ts')
+  .action(async (options: { spec: string; output: string }) => {
+    const specPath = join(process.cwd(), options.spec);
+    const outputPath = join(process.cwd(), options.output);
+
+    console.log(pc.cyan(`Reading OpenAPI spec from ${options.spec}...`));
+
+    try {
+      if (!(await fileExists(specPath))) {
+        console.error(pc.red(`Error: OpenAPI spec file not found at ${options.spec}`));
+        console.error(pc.yellow('Generate it first with "kanji openapi:generate".'));
+        process.exit(1);
+      }
+
+      const { readFileSync } = await import('fs');
+      const specContent = readFileSync(specPath, 'utf-8');
+      const spec = JSON.parse(specContent);
+
+      const { SdkGenerator } = await import('@kanjijs/openapi');
+      const sdkGenerator = new SdkGenerator();
+
+      console.log(pc.cyan('Generating TypeScript client SDK...'));
+      await sdkGenerator.generateToFile(spec, outputPath);
+
+      console.log(pc.bold(pc.green(`\nTypeScript client SDK successfully generated at "${options.output}"! 🔌`)));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(pc.red(`Error generating SDK: ${msg}`));
+      process.exit(1);
+    }
+  });
+
 program.parse(process.argv);

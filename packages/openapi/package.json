@@ -1,0 +1,20 @@
+{
+  "name": "@kanjijs/openapi",
+  "version": "1.0.0-alpha.1",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "@kanjijs/common": "workspace:*",
+    "@kanjijs/contracts": "workspace:*",
+    "@kanjijs/platform-hono": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}

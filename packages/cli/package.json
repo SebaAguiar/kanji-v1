@@ -15,6 +15,9 @@
     "commander": "^15.0.0",
     "picocolors": "^1.1.1"
   },
+  "devDependencies": {
+    "@kanjijs/openapi": "workspace:*"
+  },
   "peerDependencies": {
     "typescript": "6.0.3"
   }
