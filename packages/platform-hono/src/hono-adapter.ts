@@ -1,11 +1,11 @@
-import { Hono } from 'hono';
-import { Container } from '@kanjijs/core';
+import { Hono, type Context, type Handler } from 'hono';
+import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage';
 import type { KanjijsAdapterOptions } from './types';
 
 export class KanjijsAdapter {
   public static async create(
-    rootModule: any,
+    rootModule: Constructor<object>,
     options: KanjijsAdapterOptions = {},
   ): Promise<{ app: Hono; container: Container }> {
     const container = new Container();
@@ -13,11 +13,8 @@ export class KanjijsAdapter {
 
     const app = new Hono();
     const httpMetadata = HttpMetadataStorage.getInstance();
-
-    // 1. Obtener la lista de controladores registrados en el árbol de módulos bootstrap
     const controllers = container.getControllers();
 
-    // 2. Mapear cada controlador a Hono
     for (const { controller, module: moduleClass } of controllers) {
       const controllerPath = httpMetadata.controllers.get(controller);
       if (controllerPath === undefined) {
@@ -26,22 +23,19 @@ export class KanjijsAdapter {
         );
       }
 
-      // Resolver instancia del controlador (Errors caught at bootstrap)
-      const controllerInstance = container.resolve<any>(controller, moduleClass);
+      const controllerInstance = container.resolve(controller, moduleClass) as Record<
+        string | symbol,
+        (c: Context) => Promise<Response> | Response
+      >;
 
       const routes = httpMetadata.routes.get(controller) || [];
       const controllerMiddlewares = httpMetadata.controllerMiddlewares.get(controller) || [];
 
       for (const route of routes) {
         const fullPath = `${controllerPath}${route.path}`.replace(/\/+/g, '/');
-        
-        // Cargar middlewares a nivel de ruta
         const routeKey = `${controller.name}:${String(route.propertyKey)}`;
         const routeMiddlewares = [...(httpMetadata.routeMiddlewares.get(routeKey) || [])];
-
-        // Resolver contrato mediante Metadata de Reflect (si existe en @kanjijs/contracts)
         const contract = Reflect.getMetadata('kanji:contract', controller.prototype, route.propertyKey);
-        
         const middlewaresToApply = [...controllerMiddlewares];
 
         if (contract && options.validator) {
@@ -50,15 +44,16 @@ export class KanjijsAdapter {
 
         middlewaresToApply.push(...routeMiddlewares);
 
-        // Registrar ruta en Hono delegando en la instancia del controlador
-        const handler = async (c: any) => {
+        const handler: Handler = async (c) => {
           return controllerInstance[route.propertyKey](c);
         };
 
-        (app as any)[route.method](fullPath, ...middlewaresToApply, handler);
+        const method = route.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
+        app.on(method, [fullPath], ...middlewaresToApply, handler);
       }
     }
 
     return { app, container };
   }
 }
+

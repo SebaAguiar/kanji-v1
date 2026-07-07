@@ -31,11 +31,9 @@ export class Container {
     const localExports = new Set<Token<object>>();
     const registry = new Map<Token<object>, Provider<object>>();
 
-    // 1. Procesar imports recursivamente
     if (metadata.imports) {
       for (const imported of metadata.imports) {
         if ('module' in imported) {
-          // Módulo Dinámico (DynamicModule)
           this.scanModule(imported.module);
           
           if (imported.providers) {
@@ -51,13 +49,11 @@ export class Container {
             }
           }
         } else {
-          // Módulo Estático (ModuleRef)
           this.scanModule(imported);
         }
       }
     }
 
-    // 2. Registrar proveedores locales
     if (metadata.providers) {
       for (const provider of metadata.providers) {
         const token = this.getProviderToken(provider);
@@ -70,7 +66,6 @@ export class Container {
       }
     }
 
-    // 3. Registrar exportaciones locales
     if (metadata.exports) {
       for (const exp of metadata.exports) {
         localExports.add(exp);
@@ -231,6 +226,14 @@ export class Container {
     return provider.provide;
   }
 
+  public getInstances(): Map<Token<object>, object> {
+    return this.instances;
+  }
+
+  public getInitializedModules(): Set<Constructor<object>> {
+    return this.initializedModules;
+  }
+
   public getControllers(): Array<{ controller: Constructor<object>; module: Constructor<object> }> {
     const controllersList: Array<{ controller: Constructor<object>; module: Constructor<object> }> = [];
     for (const moduleClass of this.initializedModules) {
@@ -244,3 +247,4 @@ export class Container {
     return controllersList;
   }
 }
+

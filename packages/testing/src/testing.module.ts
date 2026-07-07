@@ -8,13 +8,13 @@ export class TestingModule {
   ) {}
 
   public get<T extends object>(token: Token<T>): T {
-    const instances = (this.container as unknown as { instances: Map<Token<object>, object> }).instances;
+    const instances = this.container.getInstances();
     if (instances.has(token)) {
       return instances.get(token) as T;
     }
 
     let lastError: Error | null = null;
-    const initializedModules = (this.container as unknown as { initializedModules: Set<Constructor<object>> }).initializedModules;
+    const initializedModules = this.container.getInitializedModules();
 
     for (const mod of initializedModules) {
       try {
@@ -52,7 +52,7 @@ export class TestingModuleBuilder {
   public async compile(): Promise<TestingModule> {
     const container = new Container();
 
-    const instancesMap = (container as unknown as { instances: Map<Token<object>, object> }).instances;
+    const instancesMap = container.getInstances();
     for (const [token, mockValue] of this.overrides.entries()) {
       instancesMap.set(token, mockValue);
     }
@@ -76,10 +76,10 @@ export class TestingModuleBuilder {
         continue;
       }
 
-      const controllerInstance = container.resolve<Record<string | symbol, (c: Context) => Promise<Response | void>>>(
-        controller as unknown as Token<Record<string | symbol, (c: Context) => Promise<Response | void>>>,
-        moduleClass
-      );
+      const controllerInstance = container.resolve(controller, moduleClass) as Record<
+        string | symbol,
+        (c: Context) => Promise<Response | void>
+      >;
 
       const routes = httpMetadata.routes.get(controller) || [];
       const controllerMiddlewares = httpMetadata.controllerMiddlewares.get(controller) || [];
