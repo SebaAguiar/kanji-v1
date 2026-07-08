@@ -88,6 +88,7 @@ Todos los documentos se encuentran bajo `docs/context/`. Estos son autoridad abs
 | **TESTING.md** | `docs/context/TESTING.md` | Estrategia de tests (unitarios, integración, E2E, coverage targets, patrones). | Cuando alguien escribe tests o necesitás validar cobertura. |
 | **DEBUGGING.md** | `docs/context/DEBUGGING.md` | Guía de debugging (logs, profiling, errores comunes, debugging con Bun/VS Code). | Cuando algo no funciona y necesitás diagnosticar el problema. |
 | **PERFORMANCE.md** | `docs/context/PERFORMANCE.md` | Budgets de performance (startup, request latency, memoria, builds). | Cuando implementás algo que puede impactar performance. |
+| **CLI-INTERACTIVE.md** | `docs/context/CLI-INTERACTIVE.md` | Especificación y roadmap para el generador CLI interactivo (wizard). | Cuando trabajes en mejoras de la experiencia del desarrollador en el CLI. |
 
 ---
 
@@ -315,6 +316,7 @@ Estas reglas no son sugerencias. Son el contrato de comportamiento del agente:
 | ¿Cómo debuggeo la app? | `docs/context/DEBUGGING.md` | Secciones 3-4 (Common Errors, Profiling) |
 | ¿Cómo escribo un commit message? | `docs/context/CONVENTIONS.md` | Sección 4 (Commit Message Protocol) |
 | ¿Qué budgets de performance hay? | `docs/context/PERFORMANCE.md` | Secciones 2-4 (Startup, Request, Memory) |
+| ¿Cuál es la especificación para el CLI interactivo? | `docs/context/CLI-INTERACTIVE.md` | Todo el documento |
 
 ---
 
@@ -349,6 +351,7 @@ kanji/
         ├── TESTING.md
         ├── DEBUGGING.md
         ├── PERFORMANCE.md
+        ├── CLI-INTERACTIVE.md
         └── AGENTS.md            # Este archivo
 ```
 
