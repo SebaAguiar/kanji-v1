@@ -1,4 +1,4 @@
-import { $ZodIssue } from 'zod/v4/core';
+import type { ZodIssue } from 'zod';
 
 export interface ValidationErrorResponse {
   error: string;
@@ -9,7 +9,7 @@ export interface ValidationErrorResponse {
   }>;
 }
 
-export function formatZodIssues(issues: $ZodIssue[]): ValidationErrorResponse {
+export function formatZodIssues(issues: ZodIssue[]): ValidationErrorResponse {
   return {
     error: 'Validation Failed',
     issues: issues.map((issue) => ({

@@ -1,3 +1,5 @@
+// packages/platform-hono/src/types.ts
+
 import type { MiddlewareHandler } from 'hono';
 import { KanjiLogger } from '@kanjijs/common';
 
@@ -14,8 +16,13 @@ export const KANJI_CTX = {
   REQUEST_ID: 'kanji.requestId',
 } as const;
 
+export interface ContractMetadata {
+  method: string;
+  path: string;
+}
+
 export interface Validator {
-  validate(contract: any): MiddlewareHandler;
+  validate(contract: ContractMetadata): MiddlewareHandler;
 }
 
 export interface KanjijsPlatformOptions {

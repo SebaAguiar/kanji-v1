@@ -1,11 +1,13 @@
+// packages/contracts/src/validator.ts
+
 import type { MiddlewareHandler } from 'hono';
 import { ZodError } from 'zod';
-import { formatZodIssues } from './errors';
+import { formatZodIssues } from './errors.js';
+import type { KanjiContract } from './types.js';
 
 export class ZodValidator {
-  public validate(contract: any): MiddlewareHandler {
+  public validate(contract: KanjiContract): MiddlewareHandler {
     return async (c, next) => {
-      // 1. Validar el Body si el contrato lo define
       if (contract.request?.body) {
         try {
           const body = await c.req.json().catch(() => ({}));
@@ -19,7 +21,6 @@ export class ZodValidator {
         }
       }
 
-      // 2. Validar URL params si el contrato lo define
       if (contract.request?.params) {
         try {
           const params = c.req.param();
@@ -33,7 +34,6 @@ export class ZodValidator {
         }
       }
 
-      // 3. Validar Query params si el contrato lo define
       if (contract.request?.query) {
         try {
           const query = c.req.query();
@@ -47,7 +47,6 @@ export class ZodValidator {
         }
       }
 
-      // 4. Validar Headers si el contrato lo define
       if (contract.request?.headers) {
         try {
           const headers = c.req.header();
