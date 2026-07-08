@@ -1,10 +1,15 @@
-import { MongoClient, Db, Document, ObjectId, ClientSession } from 'mongodb';
+import type { MongoClient, Db, Document, ObjectId, ClientSession } from 'mongodb';
 import { Database, QueryBuilder, DatabaseValue } from '../types';
+
+let MongoLib: typeof import('mongodb') | null = null;
 
 // Helper para intentar convertir strings de 24 caracteres en ObjectId
 function toMongoQueryValue(val: DatabaseValue): DatabaseValue | ObjectId {
   if (typeof val === 'string' && val.length === 24 && /^[0-9a-fA-F]{24}$/.test(val)) {
-    return new ObjectId(val);
+    if (!MongoLib) {
+      throw new Error('MongoDB library is not initialized. Ensure connection has been established.');
+    }
+    return new MongoLib.ObjectId(val);
   }
   return val;
 }
@@ -26,7 +31,7 @@ function mapFilters(conditions?: Record<string, DatabaseValue>): Document {
 function normalizeDoc<T>(doc: Document): T {
   const { _id, ...rest } = doc;
   const normalized = {
-    id: _id instanceof ObjectId ? _id.toString() : String(_id),
+    id: _id && (typeof _id === 'object' && 'toString' in _id) ? _id.toString() : String(_id),
     ...rest,
   };
   return normalized as T;
@@ -43,7 +48,7 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
   private updateData?: Record<string, DatabaseValue>;
 
   constructor(
-    private db: Db,
+    private db: Db | Promise<Db>,
     private collectionName: string,
     private session?: ClientSession
   ) {}
@@ -96,7 +101,8 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
     onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
   ): Promise<TResult1 | TResult2> {
     const execute = async (): Promise<T[]> => {
-      const collection = this.db.collection(this.collectionName);
+      const resolvedDb = await this.db;
+      const collection = resolvedDb.collection(this.collectionName);
       const options = this.session ? { session: this.session } : {};
       let result: T[] = [];
 
@@ -146,7 +152,6 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
         const insertResult = await collection.insertMany(docsToInsert, options);
         const insertedIds = Object.values(insertResult.insertedIds);
 
-        // Volver a consultar los registros insertados para simular "RETURNING"
         const docs = await collection.find({ _id: { $in: insertedIds } }, options).toArray();
         result = docs.map(normalizeDoc) as T[];
       } else if (this.type === 'update') {
@@ -156,7 +161,6 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
 
         const query = mapFilters(this.conditions);
         
-        // Obtener los documentos a actualizar primero
         const docsToUpdate = await collection.find(query, options).toArray();
         const idsToUpdate = docsToUpdate.map((d) => d._id);
 
@@ -166,14 +170,12 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
 
           await collection.updateMany({ _id: { $in: idsToUpdate } }, updateDoc, options);
 
-          // Obtener los documentos ya actualizados
           const updatedDocs = await collection.find({ _id: { $in: idsToUpdate } }, options).toArray();
           result = updatedDocs.map(normalizeDoc) as T[];
         }
       } else if (this.type === 'delete') {
         const query = mapFilters(this.conditions);
 
-        // Guardar copia de los registros antes de eliminarlos para simular "RETURNING"
         const docsToDelete = await collection.find(query, options).toArray();
         const idsToDelete = docsToDelete.map((d) => d._id);
 
@@ -193,19 +195,49 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
 }
 
 export class MongoDatabase implements Database {
-  private client: MongoClient;
-  private dbInstance: Db;
+  public clientInstance?: MongoClient;
+  public dbInstance?: Db;
 
-  constructor(connectionString: string, dbName?: string) {
-    this.client = new MongoClient(connectionString);
-    this.dbInstance = this.client.db(dbName);
+  constructor(
+    private readonly connectionString: string,
+    private readonly dbName?: string
+  ) {}
+
+  private async ensureConnected(): Promise<Db> {
+    if (this.dbInstance) {
+      return this.dbInstance;
+    }
+
+    if (!MongoLib) {
+      // Injected Bun node:v8 compatibility patch encapsulated inside the adapter
+      if (typeof globalThis.Bun !== 'undefined' && globalThis.process) {
+        const proc = globalThis.process as any;
+        const originalGetBuiltin = proc.getBuiltinModule;
+        proc.getBuiltinModule = function (name: string) {
+          if (name === 'v8') {
+            return {
+              startupSnapshot: {
+                isBuildingSnapshot: () => false
+              }
+            };
+          }
+          return originalGetBuiltin ? originalGetBuiltin.call(this, name) : undefined;
+        };
+      }
+
+      MongoLib = await import('mongodb');
+    }
+
+    this.clientInstance = new MongoLib.MongoClient(this.connectionString);
+    this.dbInstance = this.clientInstance.db(this.dbName);
+    return this.dbInstance;
   }
 
   get query() {
     return new Proxy({}, {
       get: (_target, prop) => {
         if (typeof prop === 'string') {
-          return new MongoQueryBuilder(this.dbInstance, prop);
+          return new MongoQueryBuilder(this.ensureConnected(), prop);
         }
         return undefined;
       }
@@ -213,22 +245,24 @@ export class MongoDatabase implements Database {
   }
 
   async transaction<T>(fn: (trx: Database) => Promise<T>): Promise<T> {
-    const session = this.client.startSession();
+    const db = await this.ensureConnected();
+    if (!MongoLib) {
+      throw new Error('Database not initialized');
+    }
+    const session = this.clientInstance!.startSession();
     try {
       let result: T = undefined as T;
       await session.withTransaction(async () => {
-        const trxDb = new MongoDatabase('');
-        // Enlazamos cliente, base de datos y la sesión transaccional activa
-        trxDb.client = this.client;
-        trxDb.dbInstance = this.dbInstance;
+        const trxDb = new MongoDatabase(this.connectionString, this.dbName);
+        trxDb.clientInstance = this.clientInstance;
+        trxDb.dbInstance = db;
         
-        // Sobrescribimos el getter query para que inyecte la sesión activa
         Object.defineProperty(trxDb, 'query', {
           get: () => {
             return new Proxy({}, {
               get: (_target, prop) => {
                 if (typeof prop === 'string') {
-                  return new MongoQueryBuilder(this.dbInstance, prop, session);
+                  return new MongoQueryBuilder(db, prop, session);
                 }
                 return undefined;
               }
@@ -244,26 +278,22 @@ export class MongoDatabase implements Database {
     }
   }
 
-   async raw(query: string, _params?: DatabaseValue[]): Promise<Record<string, DatabaseValue>[]> {
-
-    // Para Mongo, permitimos pasar un string JSON que representa un comando a ejecutar
-    try {
-      const commandObj = JSON.parse(query) as Document;
-      const res = await this.dbInstance.command(commandObj);
-      
-      // Si el comando devuelve un cursor (ej: agregación), intentamos extraer los resultados
-      if (res.cursor && res.cursor.firstBatch) {
-        const batch = res.cursor.firstBatch as Document[];
-        return batch.map(normalizeDoc) as Record<string, DatabaseValue>[];
-      }
-      
-      return [normalizeDoc(res)] as Record<string, DatabaseValue>[];
-    } catch (e) {
-      throw new Error(`Raw query failed: commands in MongoDB adapter must be valid JSON strings. Error: ${(e as Error).message}`);
+  async raw(query: string, _params?: DatabaseValue[]): Promise<Record<string, DatabaseValue>[]> {
+    const db = await this.ensureConnected();
+    const commandObj = JSON.parse(query) as Document;
+    const res = await db.command(commandObj);
+    
+    if (res.cursor && res.cursor.firstBatch) {
+      const batch = res.cursor.firstBatch as Document[];
+      return batch.map(normalizeDoc) as Record<string, DatabaseValue>[];
     }
+    
+    return [normalizeDoc(res)] as Record<string, DatabaseValue>[];
   }
 
   async disconnect(): Promise<void> {
-    await this.client.close();
+    if (this.clientInstance) {
+      await this.clientInstance.close();
+    }
   }
 }

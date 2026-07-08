@@ -10,6 +10,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@kanjijs/common": "workspace:*",
     "@kanjijs/core": "workspace:*",
     "hono": "4.12.27",
     "reflect-metadata": "0.2.2"

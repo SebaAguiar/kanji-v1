@@ -181,3 +181,24 @@ This document lists known edge cases, performance vulnerabilities, and system-sp
   const templatePath = join(__dirname, '..', 'templates', 'controller.hbs');
   ```
 - **Prevention:** Test CLI commands on Windows before release. Use `path.sep` for cross-platform separator handling.
+
+---
+
+## 11. DI Container: Controller Visibility
+
+- **Symptom:** App fails to bootstrap at startup throwing `Dependency injection error: Token "class UserController" is not visible in module "UserModule"`.
+- **Cause:** Controller classes registered inside modules under the `controllers` metadata array were not implicitly treated as local providers during the module scanning phase, preventing the dependency injection container from resolving them inside the HTTP Hono adapter.
+- **Solution:** In `packages/core/src/container.ts`, scan `metadata.controllers` and register each controller class directly as a provider in the module's `providerRegistry` and `localProviders`.
+
+---
+
+## 12. DI Container: Dynamic Global Modules Visibility
+
+- **Symptom:** Injectable tokens registered inside a `DynamicModule` with `global: true` (e.g. `StoreModule.forRoot()`) throw a `Provider for token "Symbol(DATABASE_CLIENT)" not found in visible modules` error when resolved inside non-root modules.
+- **Cause:**
+  - Providers registered via dynamic modules are associated with the importing module (typically `AppModule`). Since `AppModule` is not global, those providers were never flagged as global.
+  - The module scanning logic did not check `imported.global` flag on `DynamicModule` configurations, failing to register dynamic providers into `globalProviders`.
+- **Solution:** 
+  - Update `Container.scanModule` to verify if `imported.global` is set on dynamic imports, adding their tokens to `this.globalProviders`.
+  - Update `Container.findProviderModule` to look up the source module in the registry for any token flagged as global in `globalProviders`.
+

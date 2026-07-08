@@ -50,7 +50,7 @@ export class TestingModuleBuilder {
   }
 
   public async compile(): Promise<TestingModule> {
-    const container = new Container();
+    const container = new Container({ logger: false });
 
     const instancesMap = container.getInstances();
     for (const [token, mockValue] of this.overrides.entries()) {

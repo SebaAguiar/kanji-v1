@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { KanjiLogger } from '@kanjijs/common';
 
 export const KANJI_CTX = {
   VALIDATED_BODY: 'kanji.validated.body',
@@ -17,6 +18,10 @@ export interface Validator {
   validate(contract: any): MiddlewareHandler;
 }
 
-export interface KanjijsAdapterOptions {
+export interface KanjijsPlatformOptions {
   validator?: Validator;
+  logger?: KanjiLogger | boolean;
+  requestLogger?: boolean;
 }
+
+export type KanjijsAdapterOptions = KanjijsPlatformOptions;

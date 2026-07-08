@@ -100,7 +100,8 @@ export class ${singularCapitalized}Service {
 const getControllerTemplate = (name: string): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
-  return `import { Controller, Get, Post, Contract } from '@kanjijs/platform-hono';
+  return `import { Controller, Get, Post } from '@kanjijs/platform-hono';
+import { Contract } from '@kanjijs/contracts';
 import { type Context } from 'hono';
 import { ${singularCapitalized}Service } from './${singular}.service.js';
 import { ${singularCapitalized}Contracts } from './${singular}.contracts.js';

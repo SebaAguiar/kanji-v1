@@ -10,6 +10,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@kanjijs/common": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

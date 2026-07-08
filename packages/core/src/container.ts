@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { MetadataStorage } from './metadata-storage';
 import type { Token, Constructor, Provider } from './types';
+import { KanjiLogger, DefaultConsoleLogger, LOGGER } from '@kanjijs/common';
 
 export class Container {
   private readonly instances = new Map<Token<object>, object>();
@@ -9,8 +10,18 @@ export class Container {
   private readonly globalProviders = new Set<Token<object>>();
   private readonly providerRegistry = new Map<Constructor<object>, Map<Token<object>, Provider<object>>>();
   private readonly initializedModules = new Set<Constructor<object>>();
+  private readonly logger?: KanjiLogger;
 
-  constructor() {}
+  constructor(opts?: { logger?: KanjiLogger | boolean }) {
+    if (opts?.logger === true || opts?.logger === undefined) {
+      this.logger = new DefaultConsoleLogger();
+    } else if (opts?.logger !== false) {
+      this.logger = opts.logger;
+    }
+    if (this.logger) {
+      this.instances.set(LOGGER, this.logger);
+    }
+  }
 
   public bootstrap(rootModule: Constructor<object>): void {
     this.scanModule(rootModule);
@@ -35,12 +46,15 @@ export class Container {
       for (const imported of metadata.imports) {
         if ('module' in imported) {
           this.scanModule(imported.module);
-          
+
           if (imported.providers) {
             for (const p of imported.providers) {
               const token = this.getProviderToken(p);
               registry.set(token, p);
               localProviders.add(token);
+              if (imported.global) {
+                this.globalProviders.add(token);
+              }
             }
           }
           if (imported.exports) {
@@ -66,6 +80,13 @@ export class Container {
       }
     }
 
+    if (metadata.controllers) {
+      for (const controller of metadata.controllers) {
+        registry.set(controller, controller);
+        localProviders.add(controller);
+      }
+    }
+
     if (metadata.exports) {
       for (const exp of metadata.exports) {
         localExports.add(exp);
@@ -75,6 +96,10 @@ export class Container {
     this.moduleProviders.set(moduleClass, localProviders);
     this.moduleExports.set(moduleClass, localExports);
     this.providerRegistry.set(moduleClass, registry);
+
+    if (this.logger) {
+      this.logger.log(`${moduleClass.name} dependencies initialized`, 'InstanceLoader');
+    }
   }
 
   public resolve<T extends object>(token: Token<T>, contextModule: Constructor<object>): T {
@@ -205,6 +230,14 @@ export class Container {
         const importedModuleClass = 'module' in imported ? imported.module : imported;
         if (this.moduleExports.get(importedModuleClass)?.has(token)) {
           return importedModuleClass;
+        }
+      }
+    }
+
+    if (this.globalProviders.has(token)) {
+      for (const [moduleClass, registry] of this.providerRegistry.entries()) {
+        if (registry.has(token)) {
+          return moduleClass;
         }
       }
     }
