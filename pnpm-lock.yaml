@@ -170,6 +170,9 @@ importers:
       '@kanjijs/common':
         specifier: workspace:*
         version: link:../common
+      '@kanjijs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@kanjijs/core':
         specifier: workspace:*
         version: link:../core

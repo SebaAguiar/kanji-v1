@@ -1,7 +1,7 @@
 import { Hono, type Context, type Handler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage';
-import type { KanjijsAdapterOptions, ContractMetadata } from './types';
+import type { KanjijsAdapterOptions } from './types';
 import { KanjiLogger, DefaultConsoleLogger } from '@kanjijs/common';
 
 export class KanjijsAdapter {
@@ -47,7 +47,56 @@ export class KanjijsAdapter {
     const httpMetadata = HttpMetadataStorage.getInstance();
     const controllers = container.getControllers();
 
-    KanjijsAdapter.validateContracts(controllers, httpMetadata, activeLogger);
+    // Run granular contract validation checks
+    const { ContractValidator, getControllerContract, ValidationSeverity } = await import('@kanjijs/contracts');
+    const validationResults: any[] = [];
+    let hasErrors = false;
+
+    for (const { controller } of controllers) {
+      const declaredContract = getControllerContract(controller);
+      const results = ContractValidator.validate(controller, declaredContract);
+      validationResults.push(...results);
+    }
+
+    if (validationResults.length > 0) {
+      if (activeLogger) {
+        activeLogger.log('\n📋 Contract Validation Results:\n', 'ContractValidator');
+      }
+
+      for (const result of validationResults) {
+        const prefix = result.severity === ValidationSeverity.ERROR ? '❌' : '⚠️';
+        const location = result.location.method
+          ? `${result.location.controller}.${result.location.method}`
+          : result.location.controller;
+
+        const message = `${prefix} [${location}] ${result.message}`;
+        const suggestionLine = result.suggestion ? `   → ${result.suggestion}` : undefined;
+
+        if (result.severity === ValidationSeverity.ERROR) {
+          if (activeLogger) {
+            activeLogger.error(message, undefined, 'ContractValidator');
+            if (suggestionLine) {
+              activeLogger.error(suggestionLine, undefined, 'ContractValidator');
+            }
+          }
+          hasErrors = true;
+        } else {
+          if (activeLogger) {
+            activeLogger.warn(message, 'ContractValidator');
+            if (suggestionLine) {
+              activeLogger.warn(suggestionLine, 'ContractValidator');
+            }
+          }
+        }
+      }
+    }
+
+    if (hasErrors) {
+      throw new Error(
+        '[Kanji] Contract validation failed with errors (see above). ' +
+        'Fix the inconsistencies before running the application.'
+      );
+    }
 
     for (const { controller, module: moduleClass } of controllers) {
       const controllerPath = httpMetadata.controllers.get(controller);
@@ -103,64 +152,4 @@ export class KanjijsAdapter {
     return { app, container };
   }
 
-  private static validateContracts(
-    controllers: Array<{ controller: Constructor<object>; module: Constructor<object> }>,
-    httpMetadata: HttpMetadataStorage,
-    logger?: KanjiLogger,
-  ): void {
-    for (const { controller } of controllers) {
-      const prototype = controller.prototype;
-      const methods = Object.getOwnPropertyNames(prototype).filter(
-        (name) => name !== 'constructor' && typeof prototype[name] === 'function'
-      );
-      const registeredRoutes = httpMetadata.routes.get(controller) || [];
-      for (const methodName of methods) {
-        // Obtenemos los metadatos estructurales del contrato si el decorador @Contract fue aplicado
-        const contract: ContractMetadata | undefined = Reflect.getMetadata(
-          'kanji:contract',
-          prototype,
-          methodName
-        );
-        // Buscamos si el método tiene una ruta HTTP registrada en el storage
-        const httpRoute = registeredRoutes.find((route) => route.propertyKey === methodName);
-        // 1. Escenario A (Fatal Error): Tiene @Contract pero no decorador HTTP
-        if (contract && !httpRoute) {
-          throw new Error(
-            `[Kanji] Fatal Error in ${controller.name}.${methodName}: ` +
-            `Declared @Contract(${contract.method} "${contract.path}") but is missing an HTTP method decorator (@Get, @Post, etc.).`
-          );
-        }
-        // 2. Escenario B (Warning): Tiene decorador HTTP pero no tiene @Contract
-        if (httpRoute && !contract) {
-          if (logger) {
-            logger.warn(
-              `${controller.name}.${methodName} has no @Contract definition. It won't be documented in OpenAPI/SDK.`,
-              'ContractValidator'
-            );
-          }
-        }
-        // 3. Escenario C (Fatal Error): Mismatch de método o path
-        if (contract && httpRoute) {
-          const contractMethod = contract.method.toUpperCase();
-          const routeMethod = httpRoute.method.toUpperCase();
-          const contractPath = contract.path.replace(/\/+/g, '/');
-          const routePath = httpRoute.path.replace(/\/+/g, '/');
-          if (contractMethod !== routeMethod || contractPath !== routePath) {
-            throw new Error(
-              `[Kanji] Fatal Error: Mismatch detected in ${controller.name}.${methodName}.\n` +
-              `  -> @Contract expects: [${contractMethod}] "${contractPath}"\n` +
-              `  -> Decorator defines: [${routeMethod}] "${routePath}"\n` +
-              `Please correct the decorator or the contract definition to match.`
-            );
-          }
-          if (logger) {
-            logger.log(
-              `Validated ${controller.name}.${methodName}: ${routeMethod} ${routePath} [match]`,
-              'ContractValidator'
-            );
-          }
-        }
-      }
-    }
-  }
 }

@@ -1,8 +1,16 @@
-import { HttpMetadataStorage, HttpMethod } from '../http-metadata-storage';
+import 'reflect-metadata';
+import { HttpMetadataStorage, type HttpMethod } from '../http-metadata-storage';
 
 function createRouteDecorator(method: HttpMethod) {
   return (path: string = ''): MethodDecorator => {
     return (target: object, propertyKey: string | symbol) => {
+      Reflect.defineMetadata(
+        'kanji:http:method',
+        { method: method.toUpperCase(), path },
+        target,
+        propertyKey
+      );
+      
       HttpMetadataStorage.getInstance().registerRoute(target.constructor, {
         propertyKey,
         method,

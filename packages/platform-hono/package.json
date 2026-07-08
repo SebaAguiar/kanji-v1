@@ -17,6 +17,7 @@
   },
   "peerDependencies": {
     "@kanjijs/auth": "workspace:*",
+    "@kanjijs/contracts": "workspace:*",
     "typescript": "6.0.3"
   }
 }
