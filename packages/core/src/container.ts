@@ -279,5 +279,9 @@ export class Container {
     }
     return controllersList;
   }
+
+  public hasProvider(token: Token<object>, contextModule: Constructor<object>): boolean {
+    return this.findProviderModule(token, contextModule) !== null;
+  }
 }
 

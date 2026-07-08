@@ -32,4 +32,15 @@ export const UserContracts = {
       200: z.array(UserResponseSchema),
     },
   },
+  getMe: {
+    method: 'GET' as const,
+    path: '/me' as const,
+    responses: {
+      200: z.object({
+        id: z.string(),
+        email: z.string().email(),
+        name: z.string(),
+      }),
+    },
+  },
 };

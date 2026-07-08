@@ -13,6 +13,7 @@
     "@kanjijs/platform-hono": "workspace:*",
     "@kanjijs/contracts": "workspace:*",
     "@kanjijs/store": "workspace:*",
+    "@kanjijs/auth": "workspace:*",
     "hono": "^4.12.27",
     "zod": "^3.22.4",
     "reflect-metadata": "^0.2.2",

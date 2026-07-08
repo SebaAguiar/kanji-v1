@@ -27,5 +27,5 @@ export interface AuthConfig {
   };
 }
 
-export const SESSION_PROVIDER = Symbol('SESSION_PROVIDER');
+export const SESSION_PROVIDER = Symbol.for('kanji:session_provider');
 export const AUTH_CONFIG = Symbol('AUTH_CONFIG');

@@ -16,6 +16,7 @@
     "reflect-metadata": "0.2.2"
   },
   "peerDependencies": {
+    "@kanjijs/auth": "workspace:*",
     "typescript": "6.0.3"
   }
 }

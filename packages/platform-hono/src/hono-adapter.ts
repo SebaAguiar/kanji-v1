@@ -28,6 +28,17 @@ export class KanjijsAdapter {
 
     const app = new Hono();
 
+    // Auto-wire session authentication middleware if AuthModule is present in DI container
+    const sessionProviderToken = Symbol.for('kanji:session_provider');
+    if (container.hasProvider(sessionProviderToken, rootModule)) {
+      const sessionProvider = container.resolve(sessionProviderToken, rootModule);
+      const { createAuthMiddleware } = await import('@kanjijs/auth' as any);
+      app.use('*', createAuthMiddleware(sessionProvider as any));
+      if (activeLogger) {
+        activeLogger.log('Session authentication middleware auto-wired', 'InstanceLoader');
+      }
+    }
+
     // Register opt-in request logger middleware
     if (options.requestLogger) {
       const { requestLoggerMiddleware } = await import('./middleware/request-logger.js');

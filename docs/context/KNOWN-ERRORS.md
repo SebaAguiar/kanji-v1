@@ -202,3 +202,69 @@ This document lists known edge cases, performance vulnerabilities, and system-sp
   - Update `Container.scanModule` to verify if `imported.global` is set on dynamic imports, adding their tokens to `this.globalProviders`.
   - Update `Container.findProviderModule` to look up the source module in the registry for any token flagged as global in `globalProviders`.
 
+---
+
+## 13. Contract-First: Missing Controller Handlers for Declared Contracts
+
+- **Symptom:** Endpoints declared in a Zod API Contract (e.g. `UserContracts.update`) return `404 Not Found` silently in runtime, without throwing bootstrap warnings or TypeScript compiler errors.
+- **Cause:** The framework's Hono router adapter (`@kanjijs/platform-hono`) builds endpoints by reading decorators on the controller methods (`@Get`, `@Post`), and does not cross-validate whether all routes defined in the contract are actually implemented in the controller.
+- **Solution/Prevention:**
+  - **Option A (Compile-time):** Create a utility type `ControllerOf<TContract>` to force the controller class to implement the corresponding methods.
+  - **Option B (Runtime - Recommended):** Implement an automatic validation check at application startup inside `KanjijsAdapter.create()` (in `@kanjijs/platform-hono`). It will scan metadata using `Reflect.getMetadata` to verify alignment between contracts and controller decorators.
+
+### Specification & Pseudocode for Bootstrap Validation
+
+1. **Verify three scenarios**:
+   - Method has `@Contract` but no HTTP method decorator (`@Get`, `@Post`, etc.) → **Fatal error** (fail-fast, app does not start).
+   - Method has HTTP method decorator but no `@Contract` → **Warning** (logged on console).
+   - Both decorators exist → Cross-validate that the `method` and `path` defined in the contract match exactly with the decorator's parameters. Throw an error if a mismatch is found.
+
+2. **Validation Logic**:
+   ```typescript
+   for (const controller of scannedControllers) {
+     for (const methodName of Object.getOwnPropertyNames(controller.prototype)) {
+       const contractMeta = Reflect.getMetadata('kanji:contract', controller.prototype, methodName);
+       const httpMeta = Reflect.getMetadata('kanji:http:method', controller.prototype, methodName);
+       
+       // 1. Contract exists, but HTTP method decorator is missing
+       if (contractMeta && !httpMeta) {
+         throw new Error(
+           `[Kanji] ${controller.name}.${methodName} has @Contract but no HTTP method decorator`
+         );
+       }
+       
+       // 2. HTTP method exists, but @Contract is missing (warn)
+       if (httpMeta && !contractMeta) {
+         logger.warn(`${controller.name}.${methodName} has no @Contract`, 'ContractValidator');
+       }
+       
+       // 3. Mismatch checks
+       if (contractMeta && httpMeta) {
+         if (contractMeta.method !== httpMeta.method || contractMeta.path !== httpMeta.path) {
+           throw new Error(
+             `[Kanji] Mismatch in ${controller.name}.${methodName}: ` +
+             `@Contract says ${contractMeta.method} ${contractMeta.path} ` +
+             `but decorator says ${httpMeta.method} ${httpMeta.path}`
+           );
+         }
+       }
+     }
+   }
+   ```
+
+3. **Expected Bootstrap Logging Output**:
+   *   **Success case**:
+       ```text
+       [Kanji] 19:25:01 ✅ [ContractValidator] create: POST / [match]
+       [Kanji] 19:25:01 ✅ [ContractValidator] findAll: GET / [match]
+       ```
+   *   **Mismatch case**:
+       ```text
+       [Kanji] ❌ [ContractValidator] Error in UsersController.create:
+                @Contract says POST / but decorator says @Get /
+                
+                Fix: change @Get to @Post, or update the contract
+       ```
+
+
+

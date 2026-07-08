@@ -1,5 +1,6 @@
 import { Controller, Get, Post } from '@kanjijs/platform-hono';
 import { Contract } from '@kanjijs/contracts';
+import { AuthGuard, UseGuards } from '@kanjijs/auth';
 import { type Context } from 'hono';
 import { UsersService } from './users.service.js';
 import { UserContracts } from './users.contracts.js';
@@ -21,5 +22,13 @@ export class UsersController {
   async findAll(c: Context): Promise<Response> {
     const result = await this.usersService.findAll();
     return c.json(result, 200);
+  }
+
+  @Get('/me')
+  @UseGuards(AuthGuard)
+  @Contract(UserContracts.getMe)
+  async getMe(c: Context): Promise<Response> {
+    const user = c.get('kanji.auth.user');
+    return c.json(user, 200);
   }
 }

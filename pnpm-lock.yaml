@@ -29,6 +29,9 @@ importers:
 
   examples/basic:
     dependencies:
+      '@kanjijs/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@kanjijs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -161,6 +164,9 @@ importers:
 
   packages/platform-hono:
     dependencies:
+      '@kanjijs/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@kanjijs/common':
         specifier: workspace:*
         version: link:../common
