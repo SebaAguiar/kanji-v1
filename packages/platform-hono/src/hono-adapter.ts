@@ -65,11 +65,12 @@ export class KanjijsAdapter {
 
       for (const result of validationResults) {
         const prefix = result.severity === ValidationSeverity.ERROR ? '❌' : '⚠️';
-        const location = result.location.method
+        const locationName = result.location.method
           ? `${result.location.controller}.${result.location.method}`
           : result.location.controller;
-
-        const message = `${prefix} [${location}] ${result.message}`;
+        
+        const fileLoc = result.location.file ? ` (${result.location.file})` : '';
+        const message = `${prefix} [${locationName}]${fileLoc} ${result.message}`;
         const suggestionLine = result.suggestion ? `   → ${result.suggestion}` : undefined;
 
         if (result.severity === ValidationSeverity.ERROR) {

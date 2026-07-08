@@ -1,9 +1,15 @@
 import 'reflect-metadata';
 import type { KanjiContract } from '../types';
+import { captureLocation } from '../validation';
 
 export function Contract(schema: KanjiContract): MethodDecorator {
   return (target: object, propertyKey: string | symbol) => {
     Reflect.defineMetadata("kanji:contract", schema, target, propertyKey);
+
+    const location = captureLocation();
+    if (location) {
+      Reflect.defineMetadata("kanji:location", location, target, propertyKey);
+    }
   };
 }
 

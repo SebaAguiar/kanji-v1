@@ -1,6 +1,6 @@
 import { Controller, Get, Post } from '@kanjijs/platform-hono';
 import { Contract, ContractOf } from '@kanjijs/contracts';
-// import { AuthGuard, UseGuards } from '@kanjijs/auth';
+import { AuthGuard, UseGuards } from '@kanjijs/auth';
 import { type Context } from 'hono';
 import { UsersService } from './users.service.js';
 import { UserContracts } from './users.contracts.js';
@@ -25,11 +25,11 @@ export class UsersController {
     return c.json(result, 200);
   }
 
-  // @Get('/me')
-  // @UseGuards(AuthGuard)
-  // @Contract(UserContracts.getMe)
-  // async getMe(c: Context): Promise<Response> {
-  //   const user = c.get('kanji.auth.user');
-  //   return c.json(user, 200);
-  // }
+  @Get('/me')
+  @UseGuards(AuthGuard)
+  @Contract(UserContracts.getMe)
+  async getMe(c: Context): Promise<Response> {
+    const user = c.get('kanji.auth.user');
+    return c.json(user, 200);
+  }
 }

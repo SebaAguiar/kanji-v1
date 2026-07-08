@@ -33,13 +33,18 @@ export class ContractValidator {
         controller.prototype,
         methodName
       );
+      const file: string | undefined = Reflect.getMetadata(
+        'kanji:location',
+        controller.prototype,
+        methodName
+      );
 
       // Error 1: @Contract declared but no HTTP method decorator
       if (contract && !httpMeta) {
         results.push({
           severity: ValidationSeverity.ERROR,
           message: `Method '${methodName}' has @Contract but no HTTP method decorator (@Get, @Post, etc.)`,
-          location: { controller: controller.name, method: methodName },
+          location: { controller: controller.name, method: methodName, file },
           suggestion: `Add @${contract.method}('${contract.path}') above the method`,
         });
         continue;
@@ -50,7 +55,7 @@ export class ContractValidator {
         results.push({
           severity: ValidationSeverity.ERROR,
           message: `Method '${methodName}': @Contract declares ${contract.method} but decorator declares ${httpMeta.method}`,
-          location: { controller: controller.name, method: methodName },
+          location: { controller: controller.name, method: methodName, file },
           suggestion: `Change the HTTP decorator to @${contract.method.toLowerCase()}() or update the contract`,
         });
       }
@@ -63,7 +68,7 @@ export class ContractValidator {
           results.push({
             severity: ValidationSeverity.ERROR,
             message: `Method '${methodName}': @Contract declares path '${contract.path}' but decorator declares '${httpMeta.path}'`,
-            location: { controller: controller.name, method: methodName },
+            location: { controller: controller.name, method: methodName, file },
             suggestion: `Change the path in the decorator to match: @${contract.method}('${contract.path}')`,
           });
         }
@@ -78,13 +83,18 @@ export class ContractValidator {
         controller.prototype,
         methodName
       );
+      const file: string | undefined = Reflect.getMetadata(
+        'kanji:location',
+        controller.prototype,
+        methodName
+      );
 
       // Warning 1: Implemented route but missing contract schema
       if (httpMeta && !contract) {
         results.push({
           severity: ValidationSeverity.WARN,
           message: `Method '${methodName}' has @${httpMeta.method} but no @Contract decorator`,
-          location: { controller: controller.name, method: methodName },
+          location: { controller: controller.name, method: methodName, file },
           suggestion: `Add @Contract(UserContracts.${methodName}) or remove the HTTP endpoint if not needed`,
         });
       }
@@ -93,6 +103,8 @@ export class ContractValidator {
     // Warning 2: Declared in contract but missing implementation in controller
     const missing = declaredMethods.filter((m) => !implementedMethods.has(m));
     if (missing.length > 0) {
+      // For class level warnings, we can grab the location from the first implemented method or controller class constructor
+      // Since it's class level, we just locate it generally
       results.push({
         severity: ValidationSeverity.WARN,
         message: `${controller.name} declares @ContractOf but is missing implementations for: ${missing.join(', ')}`,
@@ -111,12 +123,17 @@ export class ContractValidator {
     const extra = Array.from(implementedMethods).filter(
       (m) => Reflect.getMetadata('kanji:contract', controller.prototype, m) && !declaredMethods.includes(m)
     );
-    if (extra.length > 0) {
+    for (const methodName of extra) {
+      const file: string | undefined = Reflect.getMetadata(
+        'kanji:location',
+        controller.prototype,
+        methodName
+      );
       results.push({
         severity: ValidationSeverity.WARN,
-        message: `${controller.name} implements '${extra.join(', ')}' but these are not in the declared @ContractOf contract`,
-        location: { controller: controller.name },
-        suggestion: `Add these methods to the contract object or remove the @Contract decorators from them`,
+        message: `${controller.name} implements '${methodName}' but it is not in the declared @ContractOf contract`,
+        location: { controller: controller.name, method: methodName, file },
+        suggestion: `Add this method to the contract object or remove the @Contract decorator from it`,
       });
     }
 

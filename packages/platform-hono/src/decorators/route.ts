@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { HttpMetadataStorage, type HttpMethod } from '../http-metadata-storage';
+import { captureLocation } from '@kanjijs/contracts';
 
 function createRouteDecorator(method: HttpMethod) {
   return (path: string = ''): MethodDecorator => {
@@ -10,6 +11,11 @@ function createRouteDecorator(method: HttpMethod) {
         target,
         propertyKey
       );
+
+      const location = captureLocation();
+      if (location) {
+        Reflect.defineMetadata('kanji:location', location, target, propertyKey);
+      }
       
       HttpMetadataStorage.getInstance().registerRoute(target.constructor, {
         propertyKey,
