@@ -33,7 +33,7 @@ export class DefaultConsoleLogger implements KanjiLogger {
   log(message: string, context?: string): void {
     const ts = new Date().toLocaleTimeString();
     const formattedMsg = context === 'Router' ? this.formatRouterMessage(message) : message;
-    const ctx = context ? (this.useColor ? `\x1b[33m[${context}]\x1b[0m` : `[${context}]`) : '';
+    const ctx = context ? (this.useColor ? `\x1b[36m[${context}]\x1b[0m` : `[${context}]`) : '';
     const prefix = this.useColor ? `\x1b[35m[Kanji]\x1b[0m` : '[Kanji]';
     console.log(`${prefix} ${ts} ${ctx} ${formattedMsg}`);
   }
@@ -43,7 +43,8 @@ export class DefaultConsoleLogger implements KanjiLogger {
     const formattedMsg = context === 'Router' ? this.formatRouterMessage(message) : message;
     const ctx = context ? (this.useColor ? `\x1b[33m[${context}]\x1b[0m` : `[${context}]`) : '';
     const prefix = this.useColor ? `\x1b[33m[Kanji-Warn]\x1b[0m` : '[Kanji-Warn]';
-    console.warn(`${prefix} ${ts} ${ctx} ${formattedMsg}`);
+    const msgColor = this.useColor ? `\x1b[33m${formattedMsg}\x1b[0m` : formattedMsg;
+    console.warn(`${prefix} ${ts} ${ctx} ${msgColor}`);
   }
 
   error(message: string, trace?: string, context?: string): void {
@@ -51,7 +52,8 @@ export class DefaultConsoleLogger implements KanjiLogger {
     const formattedMsg = context === 'Router' ? this.formatRouterMessage(message) : message;
     const ctx = context ? (this.useColor ? `\x1b[31m[${context}]\x1b[0m` : `[${context}]`) : '';
     const prefix = this.useColor ? '\x1b[31m[Kanji-Error]\x1b[0m' : '[Kanji-Error]';
+    const msgColor = this.useColor ? `\x1b[31m${formattedMsg}\x1b[0m` : formattedMsg;
     const traceStr = trace ? `\n${trace}` : '';
-    console.error(`${prefix} ${ts} ${ctx} ${formattedMsg}${traceStr}`);
+    console.error(`${prefix} ${ts} ${ctx} ${msgColor}${traceStr}`);
   }
 }

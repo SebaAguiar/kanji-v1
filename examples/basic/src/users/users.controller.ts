@@ -27,7 +27,7 @@ export class UsersController {
 
   @Get('/me')
   @UseGuards(AuthGuard)
-  @Contract(UserContracts.getMe)
+  // @Contract(UserContracts.getMe)
   async getMe(c: Context): Promise<Response> {
     const user = c.get('kanji.auth.user');
     return c.json(user, 200);
