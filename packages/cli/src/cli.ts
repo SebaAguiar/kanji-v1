@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { mkdir, writeFile, stat } from 'fs/promises';
+import { mkdir, writeFile, stat, readFile } from 'fs/promises';
 import { join } from 'path';
 import { execSync } from 'child_process';
 
@@ -32,6 +32,251 @@ async function fileExists(path: string): Promise<boolean> {
     return false;
   }
 }
+
+function ensurePropertyInDecorator(content: string, propertyName: string): string {
+  const regex = new RegExp(`\\b${propertyName}:`);
+  if (!regex.test(content)) {
+    return content.replace(/@KanjijsModule\(\{/, `@KanjijsModule({\n  ${propertyName}: [],`);
+  }
+  return content;
+}
+
+function updateAppModule(fileContent: string, moduleName: string, importPath: string): string {
+  if (fileContent.includes(moduleName)) {
+    return fileContent;
+  }
+
+  const importStatement = `import { ${moduleName} } from '${importPath}';\n`;
+  let updatedContent = fileContent;
+  const lastImportIndex = fileContent.lastIndexOf('import ');
+  if (lastImportIndex !== -1) {
+    const nextNewLine = fileContent.indexOf('\n', lastImportIndex);
+    if (nextNewLine !== -1) {
+      updatedContent = fileContent.slice(0, nextNewLine + 1) + importStatement + fileContent.slice(nextNewLine + 1);
+    } else {
+      updatedContent = importStatement + fileContent;
+    }
+  } else {
+    updatedContent = importStatement + fileContent;
+  }
+
+  updatedContent = ensurePropertyInDecorator(updatedContent, 'imports');
+  const importsIndex = updatedContent.indexOf('imports:');
+  if (importsIndex === -1) {
+    return updatedContent;
+  }
+
+  const openBracketIndex = updatedContent.indexOf('[', importsIndex);
+  if (openBracketIndex === -1) {
+    return updatedContent;
+  }
+
+  let bracketCount = 1;
+  let closeBracketIndex = -1;
+  for (let i = openBracketIndex + 1; i < updatedContent.length; i++) {
+    if (updatedContent[i] === '[') {
+      bracketCount++;
+    } else if (updatedContent[i] === ']') {
+      bracketCount--;
+      if (bracketCount === 0) {
+        closeBracketIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (closeBracketIndex === -1) {
+    return updatedContent;
+  }
+
+  const innerContent = updatedContent.slice(openBracketIndex + 1, closeBracketIndex);
+  const trimmedInner = innerContent.replace(/^\s*\n/, '').trimEnd();
+
+  let newInner = '';
+  if (trimmedInner.trim().length === 0) {
+    // Buscar la indentación de la línea de imports:
+    const beforeImports = updatedContent.slice(0, importsIndex);
+    const lastLineBeforeImports = beforeImports.split('\n').pop() || '';
+    const closeIndentMatch = lastLineBeforeImports.match(/^(\s*)/);
+    const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
+    
+    newInner = `\n${closeIndent}  ${moduleName},\n${closeIndent}`;
+  } else {
+    const isMultiline = innerContent.includes('\n');
+    if (isMultiline) {
+      const lines = innerContent.split('\n').filter(line => line.trim().length > 0);
+      const lastLine = lines[lines.length - 1];
+      const indentationMatch = lastLine.match(/^(\s*)/);
+      const indent = indentationMatch ? indentationMatch[1] : '    ';
+      
+      const beforeImports = updatedContent.slice(0, importsIndex);
+      const lastLineBeforeImports = beforeImports.split('\n').pop() || '';
+      const closeIndentMatch = lastLineBeforeImports.match(/^(\s*)/);
+      const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
+
+      if (trimmedInner.endsWith(',')) {
+        newInner = `\n${trimmedInner}\n${indent}${moduleName},\n${closeIndent}`;
+      } else {
+        newInner = `\n${trimmedInner},\n${indent}${moduleName},\n${closeIndent}`;
+      }
+    } else {
+      newInner = `${trimmedInner.trim()}, ${moduleName}`;
+    }
+  }
+
+  updatedContent = updatedContent.slice(0, openBracketIndex + 1) + newInner + updatedContent.slice(closeBracketIndex);
+  return updatedContent;
+}
+
+function updateLocalModule(
+  fileContent: string,
+  className: string,
+  importPath: string,
+  arrayName: 'controllers' | 'providers' | 'exports'
+): string {
+  let updatedContent = fileContent;
+  const importStatement = `import { ${className} } from '${importPath}';\n`;
+  if (!fileContent.includes(importStatement)) {
+    const lastImportIndex = fileContent.lastIndexOf('import ');
+    if (lastImportIndex !== -1) {
+      const nextNewLine = fileContent.indexOf('\n', lastImportIndex);
+      if (nextNewLine !== -1) {
+        updatedContent = fileContent.slice(0, nextNewLine + 1) + importStatement + fileContent.slice(nextNewLine + 1);
+      } else {
+        updatedContent = importStatement + fileContent;
+      }
+    } else {
+      updatedContent = importStatement + fileContent;
+    }
+  }
+
+  updatedContent = ensurePropertyInDecorator(updatedContent, arrayName);
+  const propertyKey = `${arrayName}:`;
+  const propertyIndex = updatedContent.indexOf(propertyKey);
+  if (propertyIndex === -1) {
+    return updatedContent;
+  }
+
+  const openBracketIndex = updatedContent.indexOf('[', propertyIndex);
+  if (openBracketIndex === -1) {
+    return updatedContent;
+  }
+
+  let bracketCount = 1;
+  let closeBracketIndex = -1;
+  for (let i = openBracketIndex + 1; i < updatedContent.length; i++) {
+    if (updatedContent[i] === '[') {
+      bracketCount++;
+    } else if (updatedContent[i] === ']') {
+      bracketCount--;
+      if (bracketCount === 0) {
+        closeBracketIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (closeBracketIndex === -1) {
+    return updatedContent;
+  }
+
+  const innerContent = updatedContent.slice(openBracketIndex + 1, closeBracketIndex);
+  
+  const elementRegex = new RegExp(`\\b${className}\\b`);
+  if (elementRegex.test(innerContent)) {
+    return updatedContent;
+  }
+
+  const trimmedInner = innerContent.replace(/^\s*\n/, '').trimEnd();
+
+  let newInner = '';
+  if (trimmedInner.trim().length === 0) {
+    const beforeProperty = updatedContent.slice(0, propertyIndex);
+    const lastLineBeforeProperty = beforeProperty.split('\n').pop() || '';
+    const closeIndentMatch = lastLineBeforeProperty.match(/^(\s*)/);
+    const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
+    
+    newInner = `\n${closeIndent}  ${className},\n${closeIndent}`;
+  } else {
+    const isMultiline = innerContent.includes('\n');
+    if (isMultiline) {
+      const lines = innerContent.split('\n').filter(line => line.trim().length > 0);
+      const lastLine = lines[lines.length - 1];
+      const indentationMatch = lastLine.match(/^(\s*)/);
+      const indent = indentationMatch ? indentationMatch[1] : '    ';
+      
+      const beforeProperty = updatedContent.slice(0, propertyIndex);
+      const lastLineBeforeProperty = beforeProperty.split('\n').pop() || '';
+      const closeIndentMatch = lastLineBeforeProperty.match(/^(\s*)/);
+      const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
+
+      if (trimmedInner.endsWith(',')) {
+        newInner = `\n${trimmedInner}\n${indent}${className},\n${closeIndent}`;
+      } else {
+        newInner = `\n${trimmedInner},\n${indent}${className},\n${closeIndent}`;
+      }
+    } else {
+      newInner = `${trimmedInner.trim()}, ${className}`;
+    }
+  }
+
+  updatedContent = updatedContent.slice(0, openBracketIndex + 1) + newInner + updatedContent.slice(closeBracketIndex);
+  return updatedContent;
+}
+
+const getStandaloneModuleTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { KanjijsModule } from '@kanjijs/core';
+
+@KanjijsModule({
+  controllers: [],
+  providers: [],
+  exports: [],
+})
+export class ${singularCapitalized}Module {}
+`;
+};
+
+const getStandaloneControllerTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { Controller } from '@kanjijs/platform-hono';
+
+@Controller('/${name.toLowerCase()}')
+export class ${singularCapitalized}Controller {
+  // constructor() {}
+}
+`;
+};
+
+const getStandaloneServiceTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { Injectable } from '@kanjijs/core';
+
+@Injectable()
+export class ${singularCapitalized}Service {
+  // constructor() {}
+}
+`;
+};
+
+const getStandaloneRepositoryTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { Repository, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT, type Database } from '@kanjijs/store';
+
+@Repository()
+export class ${singularCapitalized}Repository {
+  constructor(
+    @Inject(DATABASE_CLIENT)
+    private readonly db: Database
+  ) {}
+}
+`;
+};
 
 // --- Plantillas ---
 const getContractsTemplate = (name: string): string => {
@@ -71,27 +316,55 @@ export const ${singularCapitalized}Contracts = {
 `;
 };
 
+const getRepositoryTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { Repository, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT, type Database } from '@kanjijs/store';
+import type { Create${singularCapitalized}Input, ${singularCapitalized}Response } from './${singular}.contracts.js';
+
+@Repository()
+export class ${singularCapitalized}Repository {
+  constructor(
+    @Inject(DATABASE_CLIENT)
+    private readonly db: Database
+  ) {}
+
+  async create(input: Create${singularCapitalized}Input): Promise<${singularCapitalized}Response> {
+    const id = Math.random().toString(36).substring(7);
+    await this.db.query.${name}.insert({
+      id,
+      ...input,
+    });
+    return { id, ...input };
+  }
+
+  async findAll(): Promise<${singularCapitalized}Response[]> {
+    return this.db.query.${name}.select() as Promise<${singularCapitalized}Response[]>;
+  }
+}
+`;
+};
+
 const getServiceTemplate = (name: string): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
   return `import { Injectable } from '@kanjijs/core';
+import { ${singularCapitalized}Repository } from './${singular}.repository.js';
 import type { Create${singularCapitalized}Input, ${singularCapitalized}Response } from './${singular}.contracts.js';
 
 @Injectable()
 export class ${singularCapitalized}Service {
-  private readonly ${name}: ${singularCapitalized}Response[] = [];
+  constructor(
+    private readonly repository: ${singularCapitalized}Repository
+  ) {}
 
   async create(input: Create${singularCapitalized}Input): Promise<${singularCapitalized}Response> {
-    const item: ${singularCapitalized}Response = {
-      id: Math.random().toString(36).substring(7),
-      ...input,
-    };
-    this.${name}.push(item);
-    return item;
+    return this.repository.create(input);
   }
 
   async findAll(): Promise<${singularCapitalized}Response[]> {
-    return this.${name};
+    return this.repository.findAll();
   }
 }
 `;
@@ -134,10 +407,15 @@ const getModuleTemplate = (name: string): string => {
   return `import { KanjijsModule } from '@kanjijs/core';
 import { ${singularCapitalized}Controller } from './${singular}.controller.js';
 import { ${singularCapitalized}Service } from './${singular}.service.js';
+import { ${singularCapitalized}Repository } from './${singular}.repository.js';
 
 @KanjijsModule({
   controllers: [${singularCapitalized}Controller],
-  providers: [${singularCapitalized}Service],
+  providers: [
+    ${singularCapitalized}Repository,
+    ${singularCapitalized}Service,
+  ],
+  exports: [${singularCapitalized}Service],
 })
 export class ${singularCapitalized}Module {}
 `;
@@ -145,24 +423,91 @@ export class ${singularCapitalized}Module {}
 
 const getIndexTemplate = (name: string): string => {
   const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
   return `export * from './${singular}.contracts.js';
+export * from './${singular}.repository.js';
 export * from './${singular}.service.js';
 export * from './${singular}.controller.js';
 export * from './${singular}.module.js';
 `;
 };
 
-// --- Comando: kanji g resource <name> ---
+const getTestTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { describe, it, expect, beforeEach } from 'bun:test';
+import { Test } from '@kanjijs/testing';
+import { ${singularCapitalized}Controller } from '../${singular}.controller.js';
+import { ${singularCapitalized}Service } from '../${singular}.service.js';
+import { ${singularCapitalized}Repository } from '../${singular}.repository.js';
+import { DATABASE_CLIENT } from '@kanjijs/store';
+
+describe('${singularCapitalized}Controller', () => {
+  let controller: ${singularCapitalized}Controller;
+  let service: ${singularCapitalized}Service;
+  let repository: ${singularCapitalized}Repository;
+
+  beforeEach(async () => {
+    const mockDb = {
+      query: {
+        ${name}: {
+          insert: async () => {},
+          select: async () => [],
+        },
+      },
+    };
+
+    const module = await Test.createTestingModule({
+      imports: [],
+    })
+      .overrideProvider(DATABASE_CLIENT)
+      .useValue(mockDb as any)
+      .overrideProvider(${singularCapitalized}Repository)
+      .useClass(${singularCapitalized}Repository)
+      .overrideProvider(${singularCapitalized}Service)
+      .useClass(${singularCapitalized}Service)
+      .overrideProvider(${singularCapitalized}Controller)
+      .useClass(${singularCapitalized}Controller)
+      .compile();
+
+    controller = module.get(${singularCapitalized}Controller);
+    service = module.get(${singularCapitalized}Service);
+    repository = module.get(${singularCapitalized}Repository);
+  });
+
+  describe('POST /', () => {
+    it('should create a ${singular}', async () => {
+      // TODO: Implementar test
+      expect(controller).toBeDefined();
+      expect(service).toBeDefined();
+      expect(repository).toBeDefined();
+    });
+  });
+
+  describe('GET /', () => {
+    it('should return all ${name}', async () => {
+      // TODO: Implementar test
+      expect(controller).toBeDefined();
+    });
+  });
+});
+`;
+};
+
+// --- Comando: kanji g <type> <name> ---
 program
   .command('g')
   .alias('generate')
-  .argument('<type>', 'Type of artifact to generate (resource)')
-  .argument('<name>', 'Name of the resource (e.g. users)')
+  .argument('<type>', 'Type of artifact to generate (resource, module, controller, service, repository)')
+  .argument('<name>', 'Name of the artifact')
   .option('--dry-run', 'Preview changes without writing to disk', false)
   .option('--force', 'Overwrite existing files', false)
   .action(async (type: string, name: string, options: { dryRun: boolean; force: boolean }) => {
-    if (type.toLowerCase() !== 'resource') {
-      console.error(pc.red(`Error: Generating type "${type}" is not supported. Use "resource".`));
+    const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository'];
+    const artifactType = type.toLowerCase().trim();
+
+    if (!allowedTypes.includes(artifactType)) {
+      console.error(pc.red(`Error: Generating type "${type}" is not supported. Use: ${allowedTypes.join(', ')}.`));
       process.exit(1);
     }
 
@@ -170,20 +515,46 @@ program
     const singular = toSingular(normalizedName);
     const targetDir = join(process.cwd(), 'src', normalizedName);
 
-    console.log(pc.cyan(`\nProcessing resource "${normalizedName}"...`));
+    console.log(pc.cyan(`\nProcessing ${artifactType} "${normalizedName}"...`));
 
-    const files = [
-      { path: `${singular}.contracts.ts`, content: getContractsTemplate(normalizedName) },
-      { path: `${singular}.service.ts`, content: getServiceTemplate(normalizedName) },
-      { path: `${singular}.controller.ts`, content: getControllerTemplate(normalizedName) },
-      { path: `${singular}.module.ts`, content: getModuleTemplate(normalizedName) },
-      { path: 'index.ts', content: getIndexTemplate(normalizedName) },
-    ];
+    let files: { path: string; content: string }[] = [];
+
+    if (artifactType === 'resource') {
+      files = [
+        { path: `${singular}.contracts.ts`, content: getContractsTemplate(normalizedName) },
+        { path: `${singular}.repository.ts`, content: getRepositoryTemplate(normalizedName) },
+        { path: `${singular}.service.ts`, content: getServiceTemplate(normalizedName) },
+        { path: `${singular}.controller.ts`, content: getControllerTemplate(normalizedName) },
+        { path: `${singular}.module.ts`, content: getModuleTemplate(normalizedName) },
+        { path: `__tests__/${singular}.controller.spec.ts`, content: getTestTemplate(normalizedName) },
+        { path: 'index.ts', content: getIndexTemplate(normalizedName) },
+      ];
+    } else if (artifactType === 'module') {
+      files = [
+        { path: `${singular}.module.ts`, content: getStandaloneModuleTemplate(normalizedName) },
+        { path: 'index.ts', content: `export * from './${singular}.module.js';\n` },
+      ];
+    } else if (artifactType === 'controller') {
+      files = [
+        { path: `${singular}.controller.ts`, content: getStandaloneControllerTemplate(normalizedName) },
+      ];
+    } else if (artifactType === 'service') {
+      files = [
+        { path: `${singular}.service.ts`, content: getStandaloneServiceTemplate(normalizedName) },
+      ];
+    } else if (artifactType === 'repository') {
+      files = [
+        { path: `${singular}.repository.ts`, content: getStandaloneRepositoryTemplate(normalizedName) },
+      ];
+    }
 
     if (options.dryRun) {
       console.log(pc.yellow('--- DRY RUN (No changes will be applied) ---'));
       for (const file of files) {
         console.log(pc.gray(`Would create: src/${normalizedName}/${file.path}`));
+      }
+      if (artifactType !== 'resource' && artifactType !== 'module') {
+        console.log(pc.gray(`Would verify or create/update index: src/${normalizedName}/index.ts`));
       }
       console.log(pc.bold(pc.green('Dry run completed! 🎉')));
       return;
@@ -203,18 +574,94 @@ program
       }
 
       await mkdir(targetDir, { recursive: true });
+      if (artifactType === 'resource') {
+        await mkdir(join(targetDir, '__tests__'), { recursive: true });
+      }
 
+      // Write generated files
       for (const file of files) {
         const filePath = join(targetDir, file.path);
         await writeFile(filePath, file.content, 'utf-8');
         console.log(pc.green(`  CREATED  src/${normalizedName}/${file.path}`));
       }
 
-      console.log(pc.bold(pc.green(`\nResource "${normalizedName}" successfully generated! 🎉`)));
-      console.log(pc.yellow(`Remember to import ${capitalize(singular)}Module in your AppModule.`));
+      // Update local index.ts for standalone components
+      if (artifactType !== 'resource' && artifactType !== 'module') {
+        const indexFilePath = join(targetDir, 'index.ts');
+        const exportLine = `export * from './${singular}.${artifactType}.js';\n`;
+        if (await fileExists(indexFilePath)) {
+          const indexContent = await readFile(indexFilePath, 'utf-8');
+          if (!indexContent.includes(`./${singular}.${artifactType}.js`)) {
+            await writeFile(indexFilePath, indexContent + exportLine, 'utf-8');
+            console.log(pc.yellow(`  UPDATED  src/${normalizedName}/index.ts (exported ${capitalize(singular)}${capitalize(artifactType)})`));
+          }
+        } else {
+          await writeFile(indexFilePath, exportLine, 'utf-8');
+          console.log(pc.green(`  CREATED  src/${normalizedName}/index.ts`));
+        }
+      }
+
+      // Auto-register in app.module.ts for resource and module
+      const appModulePath = join(process.cwd(), 'src', 'app.module.ts');
+      if (await fileExists(appModulePath)) {
+        if (artifactType === 'resource' || artifactType === 'module') {
+          const moduleName = `${capitalize(singular)}Module`;
+          const importPath = `./${normalizedName}/${singular}.module.js`;
+          try {
+            const content = await readFile(appModulePath, 'utf-8');
+            if (!content.includes(moduleName)) {
+              const updatedContent = updateAppModule(content, moduleName, importPath);
+              await writeFile(appModulePath, updatedContent, 'utf-8');
+              console.log(pc.yellow(`  UPDATED  src/app.module.ts (registered ${moduleName})`));
+            }
+          } catch (err) {
+            console.warn(pc.yellow(`Warning: Could not auto-register module in app.module.ts: ${err instanceof Error ? err.message : String(err)}`));
+          }
+        }
+      }
+
+      // Auto-register in local module for controller, service, and repository
+      if (artifactType === 'controller' || artifactType === 'service' || artifactType === 'repository') {
+        const localModulePath = join(targetDir, `${singular}.module.ts`);
+        if (await fileExists(localModulePath)) {
+          const className = `${capitalize(singular)}${capitalize(artifactType)}`;
+          const importPath = `./${singular}.${artifactType}.js`;
+          
+          let arrayName: 'controllers' | 'providers' | 'exports' = 'providers';
+          if (artifactType === 'controller') {
+            arrayName = 'controllers';
+          }
+
+          try {
+            let content = await readFile(localModulePath, 'utf-8');
+            let updated = false;
+
+            if (!content.includes(className)) {
+              content = updateLocalModule(content, className, importPath, arrayName);
+              updated = true;
+              
+              if (artifactType === 'service') {
+                content = updateLocalModule(content, className, importPath, 'exports');
+              }
+            }
+
+            if (updated) {
+              await writeFile(localModulePath, content, 'utf-8');
+              console.log(pc.yellow(`  UPDATED  src/${normalizedName}/${singular}.module.ts (registered ${className})`));
+            }
+          } catch (err) {
+            console.warn(pc.yellow(`Warning: Could not auto-register ${className} in ${singular}.module.ts: ${err instanceof Error ? err.message : String(err)}`));
+          }
+        }
+      }
+
+      console.log(pc.bold(pc.green(`\n${capitalize(artifactType)} "${normalizedName}" successfully generated! 🎉`)));
+      if (artifactType === 'resource' || artifactType === 'module') {
+        console.log(pc.yellow(`Remember to import ${capitalize(singular)}Module in your AppModule.`));
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      console.error(pc.red(`Error generating resource: ${msg}`));
+      console.error(pc.red(`Error generating ${artifactType}: ${msg}`));
       process.exit(1);
     }
   });
@@ -326,7 +773,7 @@ function runDelegateCommand(cmd: string) {
   try {
     execSync(cmd, { stdio: 'inherit' });
   } catch {
-    // child_process maneja la impresión de salida de error directamente con 'inherit'
+    // child_process handles error output directly when using 'inherit'
     process.exit(1);
   }
 }
