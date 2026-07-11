@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: kanji-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: kanji_core_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  mongodb-test:
+    image: mongo:7.0
+    container_name: kanji-mongodb-test
+    ports:
+      - '27018:27017'
+    volumes:
+      - mongodb_test_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  postgres_test_data:
+  mongodb_test_data:
