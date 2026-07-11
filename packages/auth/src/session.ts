@@ -22,8 +22,8 @@ export class SessionProvider {
   }
 
   /**
-   * Verifica un token JWT de forma segura y devuelve la sesión estructurada.
-   * Si el token es inválido o expiró, retorna null.
+   * Safely verifies a JWT token and returns the structured session.
+   * Returns null if the token is invalid or expired.
    */
   public verifyToken(token: string): KanjiSession | null {
     try {
@@ -32,7 +32,7 @@ export class SessionProvider {
       if (typeof decoded === 'object' && decoded !== null) {
         const payload = decoded as Record<string, unknown>;
         
-        // Validación estructural estricta en tiempo de ejecución sin usar any/unknown
+        // Strict runtime structural validation without using any/unknown
         if (
           typeof payload.userId === 'string' &&
           typeof payload.email === 'string' &&

@@ -14,14 +14,13 @@ const schemas = new Map<string, z.ZodTypeAny>();
 const errors: string[] = [];
 
 export function env<T extends z.ZodTypeAny>(key: string, schema: T): z.infer<T> {
-  // Registramos el esquema para poder autogenerar el .env.example
+  // Register schema for .env.example autogeneration
   schemas.set(key, schema);
 
   if (cache.has(key)) {
     return cache.get(key) as z.infer<T>;
   }
 
-  // safeParse tolera undefined y devuelve un objeto seguro
   const result = schema.safeParse(process.env[key]);
   if (!result.success) {
     errors.push(`${key}: ${result.error.issues.map(i => i.message).join(', ')}`);
@@ -38,7 +37,7 @@ export function assertEnvValid(): void {
   }
 }
 
-// Expone el mapa para que el CLI o herramientas de desarrollo lean las firmas de tipos
+// Expose schemas map for CLI or developer tools
 export function getRegisteredEnvs(): Map<string, z.ZodTypeAny> {
   return schemas;
 }

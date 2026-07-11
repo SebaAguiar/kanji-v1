@@ -16,7 +16,7 @@ export class AuthController {
     const email = body.email || 'guest@kanjijs.com';
     const name = body.name || 'Guest User';
 
-    // Generar un token firmado para pruebas con validez de 1 hora (3600 segundos)
+    // Generate a signed token for testing valid for 1 hour (3600 seconds)
     const token = this.session.createToken(
       {
         userId: 'usr-' + Math.random().toString(36).substring(7),

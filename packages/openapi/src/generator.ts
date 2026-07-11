@@ -67,8 +67,8 @@ export class OpenApiGenerator {
               });
             }
           } else {
-            // Si el path de Hono tiene parámetros como :id pero no hay schema de params,
-            // los agregamos de forma genérica como strings para cumplir con la especificación de OpenAPI
+            // If the Hono path has parameters like :id but there is no params schema,
+            // add them generically as strings to comply with the OpenAPI spec
             const pathParams = openApiPath.match(/\{([a-zA-Z0-9_]+)\}/g);
             if (pathParams) {
               for (const p of pathParams) {

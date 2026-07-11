@@ -3,7 +3,7 @@ import { Database, QueryBuilder, DatabaseValue } from '../types';
 
 let MongoLib: typeof import('mongodb') | null = null;
 
-// Helper para intentar convertir strings de 24 caracteres en ObjectId
+// Helper to attempt converting 24-character hex strings to ObjectId
 function toMongoQueryValue(val: DatabaseValue): DatabaseValue | ObjectId {
   if (typeof val === 'string' && val.length === 24 && /^[0-9a-fA-F]{24}$/.test(val)) {
     if (!MongoLib) {
@@ -14,7 +14,7 @@ function toMongoQueryValue(val: DatabaseValue): DatabaseValue | ObjectId {
   return val;
 }
 
-// Convierte un filtro unificado { id, ... } en filtros compatibles con Mongo { _id, ... }
+// Convert a unified filter { id, ... } into Mongo-compatible filters { _id, ... }
 function mapFilters(conditions?: Record<string, DatabaseValue>): Document {
   const query: Document = {};
   if (!conditions) {
@@ -27,7 +27,7 @@ function mapFilters(conditions?: Record<string, DatabaseValue>): Document {
   return query;
 }
 
-// Normaliza un documento Mongo reemplazando _id por id: string
+// Normalize a Mongo document by replacing _id with id: string
 function normalizeDoc<T>(doc: Document): T {
   const { _id, ...rest } = doc;
   const normalized = {

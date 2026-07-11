@@ -217,7 +217,7 @@ export class PostgresDatabase implements Database {
   }
 
   async raw(query: string, params?: DatabaseValue[]): Promise<Record<string, DatabaseValue>[]> {
-    // Usamos el cliente PostgresJS para ejecutar queries crudas
+    // Use PostgresJS client to execute raw queries
     const rows = await this.client.unsafe(query, params as string[]);
     return rows as Record<string, DatabaseValue>[];
   }
