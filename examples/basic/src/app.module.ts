@@ -4,6 +4,7 @@ import { AuthModule } from '@kanjijs/auth';
 import { UsersModule } from './users/users.module.js';
 import { AuthExampleModule } from './auth/auth.module.js';
 import * as usersSchema from './users/users.schema.js';
+import { ProductModule } from './products/product.module.js';
 
 @KanjijsModule({
   imports: [
@@ -17,6 +18,7 @@ import * as usersSchema from './users/users.schema.js';
     }),
     UsersModule,
     AuthExampleModule,
+    ProductModule,
   ],
 })
 export class AppModule {}
