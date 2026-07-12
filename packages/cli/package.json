@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "commander": "^15.0.0",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2"
   },
   "devDependencies": {
-    "@kanjijs/openapi": "workspace:*"
+    "@kanjijs/openapi": "workspace:*",
+    "@types/prompts": "^2.4.9"
   },
   "peerDependencies": {
     "typescript": "6.0.3"

@@ -27,6 +27,12 @@ export class KanjijsAdapter {
 
     const app = new Hono();
 
+    // Inject DI Container globally into Hono Context
+    app.use('*', async (c, next) => {
+      (c as any).set('kanji.container', container);
+      await next();
+    });
+
     // Auto-wire session authentication middleware if AuthModule is present in DI container
     const sessionProviderToken = Symbol.for('kanji:session_provider');
     if (container.hasProvider(sessionProviderToken, rootModule)) {

@@ -1,6 +1,6 @@
 import type { Context, Next, MiddlewareHandler } from 'hono';
 import { KANJI_CTX, HttpMetadataStorage } from '@kanjijs/platform-hono';
-
+import type { ClassLevelPermissions, ClpPermissionRule, AclOptions } from './policy.js';
 
 export const AuthGuard: MiddlewareHandler = async (c: Context, next: Next): Promise<Response | void> => {
   const user = c.get(KANJI_CTX.AUTH_USER as string);
@@ -9,6 +9,109 @@ export const AuthGuard: MiddlewareHandler = async (c: Context, next: Next): Prom
   }
   await next();
 };
+
+export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
+  return async (c: Context, next: Next) => {
+    const method = c.req.method.toUpperCase();
+    let action: 'create' | 'read' | 'update' | 'delete' | null = null;
+    
+    if (method === 'POST') action = 'create';
+    else if (method === 'GET') action = 'read';
+    else if (method === 'PATCH' || method === 'PUT') action = 'update';
+    else if (method === 'DELETE') action = 'delete';
+
+    if (!action) {
+      return c.json({ error: 'Forbidden', message: 'Method not allowed for CLP validation' }, 403);
+    }
+
+    const rule = permissions[action];
+    if (!rule) {
+      return c.json({ error: 'Forbidden', message: `No permissions defined for action "${action}"` }, 403);
+    }
+
+    if (rule === 'public') {
+      await next();
+      return;
+    }
+
+    const user = c.get(KANJI_CTX.AUTH_USER as string);
+    if (!user) {
+      return c.json({ error: 'Unauthorized', message: 'Authentication required for this resource' }, 401);
+    }
+
+    if (rule === 'authenticated') {
+      await next();
+      return;
+    }
+
+    const ruleObj = rule as ClpPermissionRule;
+    if (ruleObj.public) {
+      await next();
+      return;
+    }
+    if (ruleObj.authenticated) {
+      await next();
+      return;
+    }
+
+    const userRoles: string[] = user.roles || [];
+    if (ruleObj.role && !userRoles.includes(ruleObj.role)) {
+      return c.json({ error: 'Forbidden', message: `Required role "${ruleObj.role}" is missing` }, 403);
+    }
+
+    if (ruleObj.anyRole && !ruleObj.anyRole.some(r => userRoles.includes(r))) {
+      return c.json({ error: 'Forbidden', message: `Missing required role. Required one of: ${ruleObj.anyRole.join(', ')}` }, 403);
+    }
+
+    await next();
+  };
+}
+
+export function acl(options: AclOptions): MiddlewareHandler {
+  return async (c: Context, next: Next) => {
+    const user = c.get(KANJI_CTX.AUTH_USER as string);
+    if (!user) {
+      return c.json({ error: 'Unauthorized', message: 'Authentication required for ACL validation' }, 401);
+    }
+
+    const idSelector = options.resourceId ?? ((ctx) => ctx.req.param('id'));
+    const resourceId = idSelector(c);
+
+    if (!resourceId) {
+      return c.json({ error: 'Bad Request', message: 'Resource ID parameter is missing' }, 400);
+    }
+
+    const resource = await options.resourceResolver(c, resourceId);
+    if (!resource) {
+      return c.json({ error: 'Not Found', message: 'Resource not found' }, 404);
+    }
+
+    const container: any = c.get(KANJI_CTX.CONTAINER as string);
+    if (!container) {
+      throw new Error('[Kanji] DI Container not found in Hono context.');
+    }
+    const policyInstance = container.resolve(options.policy);
+
+    let isAuthorized = false;
+    if (options.action === 'read' && policyInstance.canRead) {
+      isAuthorized = await policyInstance.canRead(c, resource, user);
+    } else if (options.action === 'update' && policyInstance.canUpdate) {
+      isAuthorized = await policyInstance.canUpdate(c, resource, user);
+    } else if (options.action === 'delete' && policyInstance.canDelete) {
+      isAuthorized = await policyInstance.canDelete(c, resource, user);
+    }
+
+    if (!isAuthorized) {
+      if (options.hideExistence) {
+        return c.json({ error: 'Not Found', message: 'Resource not found' }, 404);
+      }
+      return c.json({ error: 'Forbidden', message: 'You do not have access to this resource object' }, 403);
+    }
+
+    c.set(`kanji.resource.${options.action}`, resource);
+    await next();
+  };
+}
 
 export function UseGuards(...guards: MiddlewareHandler[]): (target: object | Function, propertyKey?: string | symbol) => void {
   return (target: object | Function, propertyKey?: string | symbol): void => {

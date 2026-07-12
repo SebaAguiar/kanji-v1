@@ -3,10 +3,19 @@ import { execSync } from 'child_process';
 import { mkdtemp, rm, readdir, stat, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import {
+  getContractsTemplate,
+  getRepositoryTemplate,
+  getControllerTemplate,
+  getTestTemplate,
+  detectDatabaseFromAppModule,
+  getPolicyTemplate
+} from '../cli.js';
 
 describe('CLI Generate Command', () => {
   let tmpProjectDir: string;
-  const cliPath = join(__dirname, '../cli.ts');
+  const isDist = __dirname.includes('dist');
+  const cliPath = join(__dirname, isDist ? '../cli.js' : '../cli.ts');
 
   beforeAll(async () => {
     // Create a temporary project workspace in system temp folder
@@ -141,7 +150,7 @@ export class AppModule {}
     expect(localModuleContent).toContain("OrderController");
 
     const indexContent = await Bun.file(join(controllerWorkspace, 'src', 'orders', 'index.ts')).text();
-    expect(indexContent).toContain("export * from './order.controller.js';");
+    expect(indexContent).toContain("export * from './order.controller';");
 
     await rm(controllerWorkspace, { recursive: true, force: true });
   });
@@ -167,5 +176,96 @@ export class AppModule {}
     expect(localModuleContent).toContain("InventoryService");
 
     await rm(serviceWorkspace, { recursive: true, force: true });
+  });
+
+  describe('Template Customization Options', () => {
+    it('should generate contracts correctly based on CRUD actions', () => {
+      const options = {
+        crudActions: ['findOne'] as any[],
+        authModel: 'none' as const,
+        dbAdapter: 'none' as const,
+        generateTests: false
+      };
+      const template = getContractsTemplate('products', options);
+      expect(template).toContain('findOne:');
+      expect(template).not.toContain('create:');
+      expect(template).not.toContain('findAll:');
+    });
+
+    it('should generate MongoDB repository adapter correctly', () => {
+      const options = {
+        crudActions: ['create', 'findAll'] as any[],
+        authModel: 'none' as const,
+        dbAdapter: 'mongodb' as const,
+        generateTests: false
+      };
+      const template = getRepositoryTemplate('products', options);
+      expect(template).toContain("collection('products').insertOne");
+      expect(template).toContain("collection('products').find().toArray()");
+    });
+
+    it('should generate Controller with authorization decorators', () => {
+      const options = {
+        crudActions: ['findAll'] as any[],
+        authModel: 'role-based' as const,
+        dbAdapter: 'none' as const,
+        generateTests: false
+      };
+      const template = getControllerTemplate('products', options);
+      expect(template).toContain("import { UseGuards } from '@kanjijs/auth';");
+      expect(template).toContain('// @UseGuards(RolesGuard)');
+    });
+
+    it('should generate test template with MongoDB support and without database client if db is none', () => {
+      const options = {
+        crudActions: ['create'] as any[],
+        authModel: 'none' as const,
+        dbAdapter: 'none' as const,
+        generateTests: true
+      };
+      const template = getTestTemplate('products', options);
+      expect(template).not.toContain('DATABASE_CLIENT');
+    });
+
+    it('should autodetect database config from app.module.ts', async () => {
+      const origCwd = process.cwd();
+      const testWorkspace = await mkdtemp(join(tmpdir(), 'kanji-cli-detect-'));
+      await mkdir(join(testWorkspace, 'src'), { recursive: true });
+
+      const appModulePath = join(testWorkspace, 'src', 'app.module.ts');
+      await Bun.write(appModulePath, `
+        import { StoreModule } from '@kanjijs/store';
+        @KanjijsModule({
+          imports: [
+            StoreModule.forRoot({
+              type: 'postgres',
+            })
+          ]
+        })
+        export class AppModule {}
+      `);
+
+      process.chdir(testWorkspace);
+      try {
+        const detected = await detectDatabaseFromAppModule();
+        expect(detected).toBe('postgres');
+      } finally {
+        process.chdir(origCwd);
+        await rm(testWorkspace, { recursive: true, force: true });
+      }
+    });
+
+    it('should generate policy template correctly based on auth model options', () => {
+      const rbacTemplate = getPolicyTemplate('products', {
+        read: { model: 'role-based', roles: ['admin', 'moderator'] }
+      });
+      expect(rbacTemplate).toContain('export class ProductPolicy implements ResourcePolicy');
+      expect(rbacTemplate).toContain('const allowed = ["admin","moderator"]');
+
+      const aclTemplate = getPolicyTemplate('products', {
+        update: { model: 'owner-based' }
+      });
+      expect(aclTemplate).toContain('resource.userId === user.userId');
+    });
   });
 });

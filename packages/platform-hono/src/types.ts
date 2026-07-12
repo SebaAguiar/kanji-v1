@@ -14,6 +14,7 @@ export const KANJI_CTX = {
   AUTH_ROLES: 'kanji.auth.roles',
   AUTH_PRINCIPAL: 'kanji.auth.principal',
   REQUEST_ID: 'kanji.requestId',
+  CONTAINER: 'kanji.container',
 } as const;
 
 export interface ContractMetadata {

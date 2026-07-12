@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { mkdir, writeFile, stat, readFile } from 'fs/promises';
+import { mkdir, writeFile, stat, readFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import { execSync } from 'child_process';
+import prompts from 'prompts';
+
+interface GeneratorOptions {
+  crudActions: ('create' | 'findAll' | 'findOne' | 'update' | 'delete')[];
+  authModel: 'none' | 'role-based' | 'owner-based';
+  dbAdapter: 'postgres' | 'mongodb' | 'none';
+  generateTests: boolean;
+}
 
 const program = new Command();
 
@@ -224,6 +232,24 @@ function updateLocalModule(
   return updatedContent;
 }
 
+export async function detectDatabaseFromAppModule(): Promise<'postgres' | 'mongodb' | null> {
+  const appModulePath = join(process.cwd(), 'src', 'app.module.ts');
+  if (await fileExists(appModulePath)) {
+    try {
+      const content = await readFile(appModulePath, 'utf-8');
+      if (content.includes("type: 'postgres'") || content.includes('type: "postgres"')) {
+        return 'postgres';
+      }
+      if (content.includes("type: 'mongodb'") || content.includes('type: "mongodb"')) {
+        return 'mongodb';
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+  return null;
+}
+
 const getStandaloneModuleTemplate = (name: string): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
@@ -279,126 +305,262 @@ export class ${singularCapitalized}Repository {
 };
 
 // --- Plantillas ---
-const getContractsTemplate = (name: string): string => {
+export const getContractsTemplate = (name: string, options?: GeneratorOptions): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
-  return `import { z } from 'zod';
+  const crudActions = options?.crudActions ?? ['create', 'findAll'];
 
-export const Create${singularCapitalized}Schema = z.object({
-  name: z.string().min(2),
-});
+  let content = `import { z } from 'zod';\n\n`;
 
-export const ${singularCapitalized}ResponseSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-});
+  const needsCreateSchema = crudActions.includes('create') || crudActions.includes('update');
+  if (needsCreateSchema) {
+    content += `export const Create${singularCapitalized}Schema = z.object({\n  name: z.string().min(2),\n});\n\n`;
+  }
 
-export type Create${singularCapitalized}Input = z.infer<typeof Create${singularCapitalized}Schema>;
-export type ${singularCapitalized}Response = z.infer<typeof ${singularCapitalized}ResponseSchema>;
+  content += `export const ${singularCapitalized}ResponseSchema = z.object({\n  id: z.string(),\n  name: z.string(),\n});\n\n`;
 
-export const ${singularCapitalized}Contracts = {
-  create: {
-    method: 'POST' as const,
-    path: '/' as const,
-    body: Create${singularCapitalized}Schema,
-    responses: {
-      201: ${singularCapitalized}ResponseSchema,
-    },
-  },
-  findAll: {
-    method: 'GET' as const,
-    path: '/' as const,
-    responses: {
-      200: z.array(${singularCapitalized}ResponseSchema),
-    },
-  },
+  if (needsCreateSchema) {
+    content += `export type Create${singularCapitalized}Input = z.infer<typeof Create${singularCapitalized}Schema>;\n`;
+  }
+  content += `export type ${singularCapitalized}Response = z.infer<typeof ${singularCapitalized}ResponseSchema>;\n\n`;
+
+  content += `export const ${singularCapitalized}Contracts = {\n`;
+
+  if (crudActions.includes('create')) {
+    content += `  create: {\n    method: 'POST' as const,\n    path: '/' as const,\n    body: Create${singularCapitalized}Schema,\n    responses: {\n      201: ${singularCapitalized}ResponseSchema,\n    },\n  },\n`;
+  }
+  if (crudActions.includes('findAll')) {
+    content += `  findAll: {\n    method: 'GET' as const,\n    path: '/' as const,\n    responses: {\n      200: z.array(${singularCapitalized}ResponseSchema),\n    },\n  },\n`;
+  }
+  if (crudActions.includes('findOne')) {
+    content += `  findOne: {\n    method: 'GET' as const,\n    path: '/:id' as const,\n    responses: {\n      200: ${singularCapitalized}ResponseSchema,\n    },\n  },\n`;
+  }
+  if (crudActions.includes('update')) {
+    content += `  update: {\n    method: 'PATCH' as const,\n    path: '/:id' as const,\n    body: Create${singularCapitalized}Schema.partial(),\n    responses: {\n      200: ${singularCapitalized}ResponseSchema,\n    },\n  },\n`;
+  }
+  if (crudActions.includes('delete')) {
+    content += `  delete: {\n    method: 'DELETE' as const,\n    path: '/:id' as const,\n    responses: {\n      200: z.object({ success: z.boolean() }),\n    },\n  },\n`;
+  }
+
+  content += `};\n`;
+  return content;
 };
-`;
-};
 
-const getRepositoryTemplate = (name: string): string => {
+export const getRepositoryTemplate = (name: string, options?: GeneratorOptions): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
-  return `import { Repository, Inject } from '@kanjijs/core';
-import { DATABASE_CLIENT, type Database } from '@kanjijs/store';
-import type { Create${singularCapitalized}Input, ${singularCapitalized}Response } from './${singular}.contracts.js';
+  const crudActions = options?.crudActions ?? ['create', 'findAll'];
+  const dbAdapter = options?.dbAdapter ?? 'postgres';
 
-@Repository()
-export class ${singularCapitalized}Repository {
-  constructor(
-    @Inject(DATABASE_CLIENT)
-    private readonly db: Database
-  ) {}
+  const needsInputType = crudActions.includes('create') || crudActions.includes('update');
+  const importInput = needsInputType ? `, Create${singularCapitalized}Input` : '';
 
-  async create(input: Create${singularCapitalized}Input): Promise<${singularCapitalized}Response> {
-    const id = Math.random().toString(36).substring(7);
-    await this.db.query.${name}.insert({
-      id,
-      ...input,
-    });
-    return { id, ...input };
+  let content = `import { Repository, Inject } from '@kanjijs/core';\n`;
+  if (dbAdapter !== 'none') {
+    content += `import { DATABASE_CLIENT, type Database } from '@kanjijs/store';\n`;
+  }
+  content += `import type { ${singularCapitalized}Response${importInput} } from './${singular}.contracts.js';\n\n`;
+
+  content += `@Repository()\nexport class ${singularCapitalized}Repository {\n`;
+  if (dbAdapter !== 'none') {
+    content += `  constructor(\n    @Inject(DATABASE_CLIENT)\n    private readonly db: Database\n  ) {}\n\n`;
+  } else {
+    content += `  // In-memory implementation\n  private items: ${singularCapitalized}Response[] = [];\n\n`;
   }
 
-  async findAll(): Promise<${singularCapitalized}Response[]> {
-    return this.db.query.${name}.select() as Promise<${singularCapitalized}Response[]>;
+  if (crudActions.includes('create')) {
+    content += `  async create(input: Create${singularCapitalized}Input): Promise<${singularCapitalized}Response> {\n`;
+    content += `    const id = Math.random().toString(36).substring(7);\n`;
+    if (dbAdapter === 'postgres') {
+      content += `    await this.db.query.${name}.insert({\n      id,\n      ...input,\n    });\n`;
+    } else if (dbAdapter === 'mongodb') {
+      content += `    await this.db.collection('${name}').insertOne({\n      _id: id,\n      ...input,\n    });\n`;
+    } else {
+      content += `    this.items.push({ id, ...input });\n`;
+    }
+    content += `    return { id, ...input };\n  }\n\n`;
   }
-}
-`;
+
+  if (crudActions.includes('findAll')) {
+    content += `  async findAll(): Promise<${singularCapitalized}Response[]> {\n`;
+    if (dbAdapter === 'postgres') {
+      content += `    return this.db.query.${name}.select() as Promise<${singularCapitalized}Response[]>;\n`;
+    } else if (dbAdapter === 'mongodb') {
+      content += `    const docs = await this.db.collection('${name}').find().toArray();\n`;
+      content += `    return docs.map(doc => ({ id: doc._id.toString(), name: doc.name })) as ${singularCapitalized}Response[];\n`;
+    } else {
+      content += `    return this.items;\n`;
+    }
+    content += `  }\n\n`;
+  }
+
+  if (crudActions.includes('findOne')) {
+    content += `  async findOne(id: string): Promise<${singularCapitalized}Response | null> {\n`;
+    if (dbAdapter === 'postgres') {
+      content += `    const result = await this.db.query.${name}.select();\n`;
+      content += `    return result.find((item: any) => item.id === id) || null;\n`;
+    } else if (dbAdapter === 'mongodb') {
+      const dbCollection = `    const doc = await this.db.collection('${name}').findOne({ _id: id });\n`;
+      content += dbCollection;
+      content += `    return doc ? { id: doc._id.toString(), name: doc.name } : null;\n`;
+    } else {
+      content += `    return this.items.find(item => item.id === id) || null;\n`;
+    }
+    content += `  }\n\n`;
+  }
+
+  if (crudActions.includes('update')) {
+    content += `  async update(id: string, input: Partial<Create${singularCapitalized}Input>): Promise<${singularCapitalized}Response> {\n`;
+    if (dbAdapter === 'postgres') {
+      content += `    await this.db.query.${name}.update(input);\n`;
+      content += `    return { id, name: input.name ?? '' };\n`;
+    } else if (dbAdapter === 'mongodb') {
+      content += `    await this.db.collection('${name}').updateOne({ _id: id }, { $set: input });\n`;
+      content += `    return { id, name: input.name ?? '' };\n`;
+    } else {
+      content += `    const idx = this.items.findIndex(item => item.id === id);\n`;
+      content += `    if (idx !== -1) {\n      this.items[idx] = { ...this.items[idx], ...input };\n      return this.items[idx];\n    }\n    throw new Error('Not found');\n`;
+    }
+    content += `  }\n\n`;
+  }
+
+  if (crudActions.includes('delete')) {
+    content += `  async delete(id: string): Promise<{ success: boolean }> {\n`;
+    if (dbAdapter === 'postgres') {
+      content += `    await this.db.query.${name}.delete();\n`;
+    } else if (dbAdapter === 'mongodb') {
+      content += `    await this.db.collection('${name}').deleteOne({ _id: id });\n`;
+    } else {
+      content += `    this.items = this.items.filter(item => item.id !== id);\n`;
+    }
+    content += `    return { success: true };\n  }\n\n`;
+  }
+
+  content += `}\n`;
+  return content;
 };
 
-const getServiceTemplate = (name: string): string => {
+export const getServiceTemplate = (name: string, options?: GeneratorOptions): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
-  return `import { Injectable } from '@kanjijs/core';
-import { ${singularCapitalized}Repository } from './${singular}.repository.js';
-import type { Create${singularCapitalized}Input, ${singularCapitalized}Response } from './${singular}.contracts.js';
+  const crudActions = options?.crudActions ?? ['create', 'findAll'];
 
-@Injectable()
-export class ${singularCapitalized}Service {
-  constructor(
-    private readonly repository: ${singularCapitalized}Repository
-  ) {}
+  const needsInputType = crudActions.includes('create') || crudActions.includes('update');
+  const importInput = needsInputType ? `, Create${singularCapitalized}Input` : '';
 
-  async create(input: Create${singularCapitalized}Input): Promise<${singularCapitalized}Response> {
-    return this.repository.create(input);
+  let content = `import { Injectable } from '@kanjijs/core';\n`;
+  content += `import { ${singularCapitalized}Repository } from './${singular}.repository.js';\n`;
+  content += `import type { ${singularCapitalized}Response${importInput} } from './${singular}.contracts.js';\n\n`;
+
+  content += `@Injectable()\nexport class ${singularCapitalized}Service {\n`;
+  content += `  constructor(private readonly repository: ${singularCapitalized}Repository) {}\n\n`;
+
+  if (crudActions.includes('create')) {
+    content += `  async create(input: Create${singularCapitalized}Input): Promise<${singularCapitalized}Response> {\n`;
+    content += `    return this.repository.create(input);\n  }\n\n`;
+  }
+  if (crudActions.includes('findAll')) {
+    content += `  async findAll(): Promise<${singularCapitalized}Response[]> {\n`;
+    content += `    return this.repository.findAll();\n  }\n\n`;
+  }
+  if (crudActions.includes('findOne')) {
+    content += `  async findOne(id: string): Promise<${singularCapitalized}Response | null> {\n`;
+    content += `    return this.repository.findOne(id);\n  }\n\n`;
+  }
+  if (crudActions.includes('update')) {
+    content += `  async update(id: string, input: Partial<Create${singularCapitalized}Input>): Promise<${singularCapitalized}Response> {\n`;
+    content += `    return this.repository.update(id, input);\n  }\n\n`;
+  }
+  if (crudActions.includes('delete')) {
+    content += `  async delete(id: string): Promise<{ success: boolean }> {\n`;
+    content += `    return this.repository.delete(id);\n  }\n\n`;
   }
 
-  async findAll(): Promise<${singularCapitalized}Response[]> {
-    return this.repository.findAll();
-  }
-}
-`;
+  content += `}\n`;
+  return content;
 };
 
-const getControllerTemplate = (name: string): string => {
+export const getControllerTemplate = (name: string, options?: GeneratorOptions): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
-  return `import { Controller, Get, Post } from '@kanjijs/platform-hono';
-import { Contract } from '@kanjijs/contracts';
-import { type Context } from 'hono';
-import { ${singularCapitalized}Service } from './${singular}.service.js';
-import { ${singularCapitalized}Contracts } from './${singular}.contracts.js';
+  const crudActions = options?.crudActions ?? ['create', 'findAll'];
+  const authModel = options?.authModel ?? 'none';
 
-@Controller('/${name.toLowerCase()}')
-export class ${singularCapitalized}Controller {
-  constructor(private readonly ${singular}Service: ${singularCapitalized}Service) {}
+  const methodsUsed = new Set<string>();
+  if (crudActions.includes('create')) methodsUsed.add('Post');
+  if (crudActions.includes('findAll') || crudActions.includes('findOne')) methodsUsed.add('Get');
+  if (crudActions.includes('update')) methodsUsed.add('Patch');
+  if (crudActions.includes('delete')) methodsUsed.add('Delete');
 
-  @Post('/')
-  @Contract(${singularCapitalized}Contracts.create)
-  async create(c: Context): Promise<Response> {
-    const input = c.get('kanji.validated.body');
-    const result = await this.${singular}Service.create(input);
-    return c.json(result, 201);
+  const methodsImport = Array.from(methodsUsed).join(', ');
+  let content = `import { Controller, ${methodsImport || 'Get'} } from '@kanjijs/platform-hono';\n`;
+  
+  if (crudActions.length > 0) {
+    content += `import { Contract } from '@kanjijs/contracts';\n`;
+  }
+  content += `import { type Context } from 'hono';\n`;
+  content += `import { ${singularCapitalized}Service } from './${singular}.service.js';\n`;
+  if (crudActions.length > 0) {
+    content += `import { ${singularCapitalized}Contracts } from './${singular}.contracts.js';\n`;
+  }
+  
+  if (authModel !== 'none') {
+    content += `import { UseGuards } from '@kanjijs/auth';\n`;
   }
 
-  @Get('/')
-  @Contract(${singularCapitalized}Contracts.findAll)
-  async findAll(c: Context): Promise<Response> {
-    const result = await this.${singular}Service.findAll();
-    return c.json(result, 200);
+  content += `\n@Controller('/${name.toLowerCase()}')\n`;
+  if (authModel === 'role-based') {
+    content += `// @UseGuards(RolesGuard)\n`;
+  } else if (authModel === 'owner-based') {
+    content += `// @UseGuards(OwnerGuard)\n`;
   }
-}
-`;
+  
+  content += `export class ${singularCapitalized}Controller {\n`;
+  content += `  constructor(private readonly ${singular}Service: ${singularCapitalized}Service) {}\n\n`;
+
+  if (crudActions.includes('create')) {
+    content += `  @Post('/')\n  @Contract(${singularCapitalized}Contracts.create)\n`;
+    content += `  async create(c: Context): Promise<Response> {\n`;
+    content += `    const input = c.get('kanji.validated.body');\n`;
+    content += `    const result = await this.${singular}Service.create(input);\n`;
+    content += `    return c.json(result, 201);\n  }\n\n`;
+  }
+
+  if (crudActions.includes('findAll')) {
+    content += `  @Get('/')\n  @Contract(${singularCapitalized}Contracts.findAll)\n`;
+    content += `  async findAll(c: Context): Promise<Response> {\n`;
+    content += `    const result = await this.${singular}Service.findAll();\n`;
+    content += `    return c.json(result, 200);\n  }\n\n`;
+  }
+
+  if (crudActions.includes('findOne')) {
+    content += `  @Get('/:id')\n  @Contract(${singularCapitalized}Contracts.findOne)\n`;
+    content += `  async findOne(c: Context): Promise<Response> {\n`;
+    content += `    const id = c.req.param('id');\n`;
+    content += `    const result = await this.${singular}Service.findOne(id);\n`;
+    content += `    if (!result) return c.json({ error: 'Not found' }, 404);\n`;
+    content += `    return c.json(result, 200);\n  }\n\n`;
+  }
+
+  if (crudActions.includes('update')) {
+    content += `  @Patch('/:id')\n  @Contract(${singularCapitalized}Contracts.update)\n`;
+    content += `  async update(c: Context): Promise<Response> {\n`;
+    content += `    const id = c.req.param('id');\n`;
+    content += `    const input = c.get('kanji.validated.body');\n`;
+    content += `    const result = await this.${singular}Service.update(id, input);\n`;
+    content += `    return c.json(result, 200);\n  }\n\n`;
+  }
+
+  if (crudActions.includes('delete')) {
+    content += `  @Delete('/:id')\n  @Contract(${singularCapitalized}Contracts.delete)\n`;
+    content += `  async delete(c: Context): Promise<Response> {\n`;
+    content += `    const id = c.req.param('id');\n`;
+    content += `    const result = await this.${singular}Service.delete(id);\n`;
+    content += `    return c.json(result, 200);\n  }\n\n`;
+  }
+
+  content += `}\n`;
+  return content;
 };
 
 const getModuleTemplate = (name: string): string => {
@@ -423,97 +585,195 @@ export class ${singularCapitalized}Module {}
 
 const getIndexTemplate = (name: string): string => {
   const singular = toSingular(name);
-  const singularCapitalized = capitalize(singular);
-  return `export * from './${singular}.contracts.js';
-export * from './${singular}.repository.js';
-export * from './${singular}.service.js';
-export * from './${singular}.controller.js';
-export * from './${singular}.module.js';
+  return `export * from './${singular}.contracts';
+export * from './${singular}.repository';
+export * from './${singular}.service';
+export * from './${singular}.controller';
+export * from './${singular}.module';
 `;
 };
 
-const getTestTemplate = (name: string): string => {
+export const getTestTemplate = (name: string, options?: GeneratorOptions): string => {
   const singular = toSingular(name);
   const singularCapitalized = capitalize(singular);
-  return `import { describe, it, expect, beforeEach } from 'bun:test';
-import { Test } from '@kanjijs/testing';
-import { ${singularCapitalized}Controller } from '../${singular}.controller.js';
-import { ${singularCapitalized}Service } from '../${singular}.service.js';
-import { ${singularCapitalized}Repository } from '../${singular}.repository.js';
-import { DATABASE_CLIENT } from '@kanjijs/store';
+  const crudActions = options?.crudActions ?? ['create', 'findAll'];
+  const dbAdapter = options?.dbAdapter ?? 'postgres';
 
-describe('${singularCapitalized}Controller', () => {
-  let controller: ${singularCapitalized}Controller;
-  let service: ${singularCapitalized}Service;
-  let repository: ${singularCapitalized}Repository;
+  let content = `import { describe, it, expect, beforeEach } from 'bun:test';\n`;
+  content += `import { Test } from '@kanjijs/testing';\n`;
+  content += `import { ${singularCapitalized}Module } from '../${singular}.module.js';\n`;
+  content += `import { ${singularCapitalized}Controller } from '../${singular}.controller.js';\n`;
+  content += `import { ${singularCapitalized}Service } from '../${singular}.service.js';\n`;
+  content += `import { ${singularCapitalized}Repository } from '../${singular}.repository.js';\n`;
+  if (dbAdapter !== 'none') {
+    content += `import { DATABASE_CLIENT } from '@kanjijs/store';\n`;
+    content += `import { KanjijsModule } from '@kanjijs/core';\n`;
+  }
+  content += `\n`;
 
-  beforeEach(async () => {
-    const mockDb = {
-      query: {
-        ${name}: {
-          insert: async () => {},
-          select: async () => [],
-        },
-      },
-    };
+  content += `describe('${singularCapitalized}Controller', () => {\n`;
+  content += `  let controller: ${singularCapitalized}Controller;\n`;
+  content += `  let service: ${singularCapitalized}Service;\n`;
+  content += `  let repository: ${singularCapitalized}Repository;\n\n`;
 
-    const module = await Test.createTestingModule({
-      imports: [],
-    })
-      .overrideProvider(DATABASE_CLIENT)
-      .useValue(mockDb as any)
-      .overrideProvider(${singularCapitalized}Repository)
-      .useClass(${singularCapitalized}Repository)
-      .overrideProvider(${singularCapitalized}Service)
-      .useClass(${singularCapitalized}Service)
-      .overrideProvider(${singularCapitalized}Controller)
-      .useClass(${singularCapitalized}Controller)
-      .compile();
+  content += `  beforeEach(async () => {\n`;
+  if (dbAdapter !== 'none') {
+    content += `    const mockDb = {\n      query: {\n        ${name}: {\n          insert: async () => {},\n          select: async () => [],\n        },\n      },\n      collection: () => ({ \n        insertOne: async () => {},\n        find: () => ({ toArray: async () => [] }),\n        findOne: async () => null,\n        updateOne: async () => {},\n        deleteOne: async () => {},\n      }),\n    };\n\n`;
+    content += `    @KanjijsModule({\n      providers: [\n        { provide: DATABASE_CLIENT, useValue: mockDb }\n      ],\n      exports: [DATABASE_CLIENT],\n      global: true\n    })\n    class MockDatabaseModule {}\n\n`;
+  }
 
-    controller = module.get(${singularCapitalized}Controller);
-    service = module.get(${singularCapitalized}Service);
-    repository = module.get(${singularCapitalized}Repository);
-  });
+  content += `    const module = await Test.createTestingModule({\n`;
+  if (dbAdapter !== 'none') {
+    content += `      imports: [MockDatabaseModule, ${singularCapitalized}Module],\n`;
+  } else {
+    content += `      imports: [${singularCapitalized}Module],\n`;
+  }
+  content += `    }).compile();\n\n`;
 
-  describe('POST /', () => {
-    it('should create a ${singular}', async () => {
-      // TODO: Implementar test
-      expect(controller).toBeDefined();
-      expect(service).toBeDefined();
-      expect(repository).toBeDefined();
-    });
-  });
+  content += `    controller = module.get(${singularCapitalized}Controller);\n    service = module.get(${singularCapitalized}Service);\n    repository = module.get(${singularCapitalized}Repository);\n  });\n\n`;
 
-  describe('GET /', () => {
-    it('should return all ${name}', async () => {
-      // TODO: Implementar test
-      expect(controller).toBeDefined();
-    });
-  });
-});
-`;
+  if (crudActions.includes('create')) {
+    content += `  describe('POST /', () => {\n    it('should create a ${singular}', async () => {\n      expect(controller).toBeDefined();\n      expect(service).toBeDefined();\n      expect(repository).toBeDefined();\n    });\n  });\n\n`;
+  }
+  if (crudActions.includes('findAll')) {
+    content += `  describe('GET /', () => {\n    it('should return all ${name}', async () => {\n      expect(controller).toBeDefined();\n    });\n  });\n\n`;
+  }
+
+  content += `});\n`;
+  return content;
 };
 
 // --- Comando: kanji g <type> <name> ---
 program
   .command('g')
   .alias('generate')
-  .argument('<type>', 'Type of artifact to generate (resource, module, controller, service, repository)')
-  .argument('<name>', 'Name of the artifact')
+  .argument('[type]', 'Type of artifact to generate (resource, module, controller, service, repository)')
+  .argument('[name]', 'Name of the artifact')
   .option('--dry-run', 'Preview changes without writing to disk', false)
   .option('--force', 'Overwrite existing files', false)
-  .action(async (type: string, name: string, options: { dryRun: boolean; force: boolean }) => {
-    const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository'];
-    const artifactType = type.toLowerCase().trim();
+  .action(async (type: string | undefined, name: string | undefined, options: { dryRun: boolean; force: boolean }) => {
+    let artifactType = type ? type.toLowerCase().trim() : undefined;
+    let normalizedName = name ? name.toLowerCase().trim() : undefined;
 
+    // 1. Interactive prompts for type
+    if (!artifactType) {
+      const response = await prompts({
+        type: 'select',
+        name: 'type',
+        message: 'What type of artifact do you want to generate?',
+        choices: [
+          { title: 'Resource (Full CRUD + Modules)', value: 'resource' },
+          { title: 'Module (DI Module)', value: 'module' },
+          { title: 'Controller (HTTP Handlers)', value: 'controller' },
+          { title: 'Service (Business Logic)', value: 'service' },
+          { title: 'Repository (Data Access)', value: 'repository' }
+        ]
+      });
+      artifactType = response.type;
+      if (!artifactType) process.exit(0);
+    }
+
+    const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository'];
     if (!allowedTypes.includes(artifactType)) {
-      console.error(pc.red(`Error: Generating type "${type}" is not supported. Use: ${allowedTypes.join(', ')}.`));
+      console.error(pc.red(`Error: Generating type "${artifactType}" is not supported. Use: ${allowedTypes.join(', ')}.`));
       process.exit(1);
     }
 
-    const normalizedName = name.toLowerCase().trim();
+    // 2. Interactive prompts for name
+    if (!normalizedName) {
+      const response = await prompts({
+        type: 'text',
+        name: 'name',
+        message: `Enter the name for the ${artifactType}:`,
+        validate: (val: string) => val.trim().length > 0 ? true : 'Name is required'
+      });
+      normalizedName = response.name.toLowerCase().trim();
+      if (!normalizedName) process.exit(0);
+    }
+
     const singular = toSingular(normalizedName);
     const targetDir = join(process.cwd(), 'src', normalizedName);
+
+    // Default configuration (for direct CLI usage)
+    let crudActions: ('create' | 'findAll' | 'findOne' | 'update' | 'delete')[] = ['create', 'findAll'];
+    let authModel: 'none' | 'role-based' | 'owner-based' = 'none';
+    let dbAdapter: 'postgres' | 'mongodb' | 'none' = 'postgres';
+    let generateTests = true;
+
+    const detectedDb = await detectDatabaseFromAppModule();
+    if (detectedDb) {
+      dbAdapter = detectedDb;
+    }
+
+    // 3. Wizard prompts for resource (interactive mode only)
+    if (artifactType === 'resource' && (!type || !name)) {
+      const hasCrud = await prompts({
+        type: 'confirm',
+        name: 'value',
+        message: 'Do you want to generate CRUD endpoints?',
+        initial: true
+      });
+
+      if (hasCrud.value) {
+        const actions = await prompts({
+          type: 'multiselect',
+          name: 'value',
+          message: 'Select CRUD actions to include:',
+          choices: [
+            { title: 'Create (POST /)', value: 'create', selected: true },
+            { title: 'Find All (GET /)', value: 'findAll', selected: true },
+            { title: 'Find One (GET /:id)', value: 'findOne', selected: false },
+            { title: 'Update (PATCH /:id)', value: 'update', selected: false },
+            { title: 'Delete (DELETE /:id)', value: 'delete', selected: false }
+          ],
+          min: 1
+        });
+        crudActions = actions.value;
+        if (!crudActions) process.exit(0);
+      } else {
+        crudActions = [];
+      }
+
+      const auth = await prompts({
+        type: 'select',
+        name: 'value',
+        message: 'Select authorization model for this resource:',
+        choices: [
+          { title: 'None (Public)', value: 'none' },
+          { title: 'Role-based (RBAC)', value: 'role-based' },
+          { title: 'Owner-based (ACL)', value: 'owner-based' }
+        ]
+      });
+      authModel = auth.value;
+      if (!authModel) process.exit(0);
+
+      if (detectedDb) {
+        console.log(pc.green(`✔ Detected database adapter: ${detectedDb === 'postgres' ? 'PostgreSQL (Drizzle ORM)' : 'MongoDB (Native adapter)'} (from app.module.ts) 💾`));
+      } else {
+        const db = await prompts({
+          type: 'select',
+          name: 'value',
+          message: 'Select database adapter:',
+          choices: [
+            { title: 'PostgreSQL (Drizzle ORM)', value: 'postgres' },
+            { title: 'MongoDB (Native adapter)', value: 'mongodb' },
+            { title: 'None (Memory/Mock)', value: 'none' }
+          ]
+        });
+        dbAdapter = db.value;
+        if (!dbAdapter) process.exit(0);
+      }
+
+      const tests = await prompts({
+        type: 'confirm',
+        name: 'value',
+        message: 'Do you want to generate integration test files?',
+        initial: true
+      });
+      generateTests = tests.value;
+    }
+
+    const genOptions: GeneratorOptions = { crudActions, authModel, dbAdapter, generateTests };
 
     console.log(pc.cyan(`\nProcessing ${artifactType} "${normalizedName}"...`));
 
@@ -521,18 +781,20 @@ program
 
     if (artifactType === 'resource') {
       files = [
-        { path: `${singular}.contracts.ts`, content: getContractsTemplate(normalizedName) },
-        { path: `${singular}.repository.ts`, content: getRepositoryTemplate(normalizedName) },
-        { path: `${singular}.service.ts`, content: getServiceTemplate(normalizedName) },
-        { path: `${singular}.controller.ts`, content: getControllerTemplate(normalizedName) },
+        { path: `${singular}.contracts.ts`, content: getContractsTemplate(normalizedName, genOptions) },
+        { path: `${singular}.repository.ts`, content: getRepositoryTemplate(normalizedName, genOptions) },
+        { path: `${singular}.service.ts`, content: getServiceTemplate(normalizedName, genOptions) },
+        { path: `${singular}.controller.ts`, content: getControllerTemplate(normalizedName, genOptions) },
         { path: `${singular}.module.ts`, content: getModuleTemplate(normalizedName) },
-        { path: `__tests__/${singular}.controller.spec.ts`, content: getTestTemplate(normalizedName) },
         { path: 'index.ts', content: getIndexTemplate(normalizedName) },
       ];
+      if (generateTests) {
+        files.push({ path: `__tests__/${singular}.controller.spec.ts`, content: getTestTemplate(normalizedName, genOptions) });
+      }
     } else if (artifactType === 'module') {
       files = [
         { path: `${singular}.module.ts`, content: getStandaloneModuleTemplate(normalizedName) },
-        { path: 'index.ts', content: `export * from './${singular}.module.js';\n` },
+        { path: 'index.ts', content: `export * from './${singular}.module';\n` },
       ];
     } else if (artifactType === 'controller') {
       files = [
@@ -588,10 +850,10 @@ program
       // Update local index.ts for standalone components
       if (artifactType !== 'resource' && artifactType !== 'module') {
         const indexFilePath = join(targetDir, 'index.ts');
-        const exportLine = `export * from './${singular}.${artifactType}.js';\n`;
+        const exportLine = `export * from './${singular}.${artifactType}';\n`;
         if (await fileExists(indexFilePath)) {
           const indexContent = await readFile(indexFilePath, 'utf-8');
-          if (!indexContent.includes(`./${singular}.${artifactType}.js`)) {
+          if (!indexContent.includes(`./${singular}.${artifactType}`)) {
             await writeFile(indexFilePath, indexContent + exportLine, 'utf-8');
             console.log(pc.yellow(`  UPDATED  src/${normalizedName}/index.ts (exported ${capitalize(singular)}${capitalize(artifactType)})`));
           }
@@ -899,4 +1161,161 @@ program
     }
   });
 
-program.parse(process.argv);
+export const getPolicyTemplate = (resourceName: string, actionRules: Record<string, { model: 'role-based' | 'owner-based'; roles?: string[] }>): string => {
+  const singular = toSingular(resourceName);
+  const singularCapitalized = capitalize(singular);
+  
+  let imports = `import { Injectable } from '@kanjijs/core';\n`;
+  imports += `import type { ResourcePolicy } from '@kanjijs/auth';\n`;
+  imports += `import type { Context } from 'hono';\n`;
+
+  let body = `@Injectable()\nexport class ${singularCapitalized}Policy implements ResourcePolicy {\n`;
+
+  const actions = ['read', 'create', 'update', 'delete'];
+  for (const action of actions) {
+    const rule = actionRules[action];
+    const methodName = `can${capitalize(action)}`;
+
+    body += `  ${methodName}(c: Context, resource: any, user: any): boolean {\n`;
+    if (rule) {
+      if (rule.model === 'role-based') {
+        const rolesArray = JSON.stringify(rule.roles || ['admin']);
+        body += `    const allowed = ${rolesArray};\n`;
+        body += `    return user.roles.some((role: string) => allowed.includes(role));\n`;
+      } else {
+        body += `    return resource.userId === user.userId || user.roles.includes('admin');\n`;
+      }
+    } else {
+      body += `    return true;\n`;
+    }
+    body += `  }\n\n`;
+  }
+
+  // Remove the trailing newline and comma, then close class
+  body = body.trimEnd() + '\n}\n';
+  return `${imports}\n${body}`;
+};
+
+program
+  .command('auth-setup')
+  .alias('g-auth')
+  .description('Configure interactive security policies for existing modules')
+  .option('--dry-run', 'Preview changes without writing to disk', false)
+  .action(async (options: { dryRun: boolean }) => {
+    console.log(pc.cyan('Scanning src/ directory for existing modules...'));
+    const srcDir = join(process.cwd(), 'src');
+
+    if (!(await fileExists(srcDir))) {
+      console.error(pc.red('Error: "src/" folder not found. Run this command at the root of a Kanji application.'));
+      process.exit(1);
+    }
+
+    const dirEntries = await readdir(srcDir, { withFileTypes: true });
+    const resources: string[] = dirEntries
+      .filter((entry) => entry.isDirectory() && !['auth', 'db', '__tests__', 'common'].includes(entry.name))
+      .map((entry) => entry.name);
+
+    if (resources.length === 0) {
+      console.log(pc.yellow('No modules found in src/ folder to secure.'));
+      process.exit(0);
+    }
+
+    const selection = await prompts({
+      type: 'multiselect',
+      name: 'value',
+      message: 'Select modules to secure:',
+      choices: resources.map((res: string) => ({ title: capitalize(res), value: res })),
+      min: 1
+    });
+
+    const selectedResources = selection.value;
+    if (!selectedResources) process.exit(0);
+
+    for (const res of selectedResources) {
+      const singular = toSingular(res);
+      const singularCapitalized = capitalize(singular);
+      const targetDir = join(srcDir, res);
+
+      console.log(pc.cyan(`\nConfiguring security for "${res}"...`));
+
+      const actionsPrompt = await prompts({
+        type: 'multiselect',
+        name: 'value',
+        message: `Select CRUD actions to secure for ${res}:`,
+        choices: [
+          { title: 'Create (POST /)', value: 'create', selected: true },
+          { title: 'Read (GET / & GET /:id)', value: 'read', selected: false },
+          { title: 'Update (PATCH /:id)', value: 'update', selected: true },
+          { title: 'Delete (DELETE /:id)', value: 'delete', selected: true }
+        ],
+        min: 0
+      });
+
+      const securedActions: string[] = actionsPrompt.value || [];
+      const actionRules: Record<string, { model: 'role-based' | 'owner-based'; roles?: string[] }> = {};
+
+      for (const action of securedActions) {
+        const modelPrompt = await prompts({
+          type: 'select',
+          name: 'value',
+          message: `Select protection model for ${action.toUpperCase()} action on ${res}:`,
+          choices: [
+            { title: 'Role-based Access Control (RBAC)', value: 'role-based' },
+            { title: 'Owner-based Access Control (ACL)', value: 'owner-based' }
+          ]
+        });
+
+        const model = modelPrompt.value;
+        if (!model) continue;
+
+        let roles: string[] = [];
+        if (model === 'role-based') {
+          const rolesPrompt = await prompts({
+            type: 'list',
+            name: 'value',
+            message: `Enter allowed roles for ${action.toUpperCase()} (comma separated):`,
+            initial: 'admin'
+          });
+          roles = rolesPrompt.value || [];
+        }
+
+        actionRules[action] = { model, roles };
+      }
+
+      const policyContent = getPolicyTemplate(res, actionRules);
+      const policyFileName = `${singular}.policy.ts`;
+      const policyPath = join(targetDir, policyFileName);
+
+      if (options.dryRun) {
+        console.log(pc.yellow(`[Dry Run] Would create policy file: src/${res}/${policyFileName}`));
+        continue;
+      }
+
+      await writeFile(policyPath, policyContent, 'utf-8');
+      console.log(pc.green(`  CREATED  src/${res}/${policyFileName}`));
+
+      const modulePath = join(targetDir, `${singular}.module.ts`);
+      if (await fileExists(modulePath)) {
+        try {
+          const content = await readFile(modulePath, 'utf-8');
+          const className = `${singularCapitalized}Policy`;
+          const importPath = `./${singular}.policy`;
+          
+          if (!content.includes(className)) {
+            let updatedContent = updateLocalModule(content, className, importPath, 'providers');
+            updatedContent = updateLocalModule(updatedContent, className, importPath, 'exports');
+            await writeFile(modulePath, updatedContent, 'utf-8');
+            console.log(pc.yellow(`  UPDATED  src/${res}/${singular}.module.ts`));
+          }
+        } catch (err) {
+          console.warn(pc.yellow(`Warning: Could not register policy in module: ${err instanceof Error ? err.message : String(err)}`));
+        }
+      }
+
+      console.log(pc.bold(pc.green(`Security setup completed for "${res}"! 🔐`)));
+    }
+  });
+
+if (import.meta.main) {
+  program.parse(process.argv);
+}
