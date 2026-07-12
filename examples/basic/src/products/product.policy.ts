@@ -2,21 +2,30 @@ import { Injectable } from '@kanjijs/core';
 import type { ResourcePolicy } from '@kanjijs/auth';
 import type { Context } from 'hono';
 
+interface ProductResource {
+  userId: string;
+}
+
+interface UserAuth {
+  userId: string;
+  roles: string[];
+}
+
 @Injectable()
 export class ProductPolicy implements ResourcePolicy {
-  canRead(c: Context, resource: any, user: any): boolean {
+  canRead(_c: Context, _resource: ProductResource, _user: UserAuth): boolean {
     return true;
   }
 
-  canCreate(c: Context, resource: any, user: any): boolean {
+  canCreate(_c: Context, resource: ProductResource, user: UserAuth): boolean {
     return resource.userId === user.userId || user.roles.includes('admin');
   }
 
-  canUpdate(c: Context, resource: any, user: any): boolean {
+  canUpdate(_c: Context, resource: ProductResource, user: UserAuth): boolean {
     return resource.userId === user.userId || user.roles.includes('admin');
   }
 
-  canDelete(c: Context, resource: any, user: any): boolean {
+  canDelete(_c: Context, resource: ProductResource, user: UserAuth): boolean {
     return resource.userId === user.userId || user.roles.includes('admin');
   }
 }
