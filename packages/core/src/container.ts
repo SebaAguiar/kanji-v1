@@ -114,11 +114,11 @@ export class Container {
     }
   }
 
-  public resolve<T extends object>(
+  public async resolve<T extends object>(
     token: Token<T>,
     contextModule: Constructor<object>,
     resolutionStack: Token<object>[] = [],
-  ): T {
+  ): Promise<T> {
     if (!this.isTokenVisible(token, contextModule)) {
       throw new Error(
         `Dependency injection error: Token "${String(
@@ -127,7 +127,7 @@ export class Container {
       );
     }
 
-    return this.getInstance(token, contextModule, resolutionStack) as T;
+    return this.getInstance(token, contextModule, resolutionStack);
   }
 
   private isTokenVisible(token: Token<object>, contextModule: Constructor<object>): boolean {
@@ -152,11 +152,11 @@ export class Container {
     return false;
   }
 
-  private getInstance<T extends object>(
+  private async getInstance<T extends object>(
     token: Token<T>,
     contextModule: Constructor<object>,
     resolutionStack: Token<object>[] = [],
-  ): T {
+  ): Promise<T> {
     if (this.instances.has(token)) {
       return this.instances.get(token) as T;
     }
@@ -179,7 +179,7 @@ export class Container {
       if (typeof token === 'function') {
         const metadataStorage = MetadataStorage.getInstance();
         if (metadataStorage.injectables.has(token as Constructor<object>)) {
-          const instance = this.instantiateClass(token as Constructor<object>, providerModule, resolutionStack);
+          const instance = await this.instantiateClass(token as Constructor<object>, providerModule, resolutionStack);
           this.instances.set(token, instance);
           return instance as T;
         }
@@ -190,16 +190,18 @@ export class Container {
     let instance: object;
 
     if (typeof provider === 'function') {
-      instance = this.instantiateClass(provider as Constructor<object>, providerModule, resolutionStack);
+      instance = await this.instantiateClass(provider as Constructor<object>, providerModule, resolutionStack);
     } else if ('useValue' in provider) {
       instance = provider.useValue;
     } else if ('useClass' in provider) {
-      instance = this.instantiateClass(provider.useClass, providerModule, resolutionStack);
+      instance = await this.instantiateClass(provider.useClass, providerModule, resolutionStack);
     } else if ('useFactory' in provider) {
       const injectTokens = provider.inject || [];
-      const injectedDeps = injectTokens.map(depToken => this.resolve(depToken, providerModule, resolutionStack));
+      const injectedDeps = await Promise.all(
+        injectTokens.map(depToken => this.resolve(depToken, providerModule, resolutionStack))
+      );
       const factoryResult = provider.useFactory(...injectedDeps);
-      instance = factoryResult as object;
+      instance = await factoryResult as object;
     } else {
       throw new Error(`Invalid provider definition for token "${String(token)}".`);
     }
@@ -209,15 +211,15 @@ export class Container {
     return instance as T;
   }
 
-  private instantiateClass(
+  private async instantiateClass(
     clazz: Constructor<object>,
     moduleContext: Constructor<object>,
     resolutionStack: Token<object>[],
-  ): object {
+  ): Promise<object> {
     const paramTypes: Constructor<object>[] = Reflect.getMetadata('design:paramtypes', clazz) || [];
     const customInjections = MetadataStorage.getInstance().customInjections.get(clazz) || [];
 
-    const args = paramTypes.map((paramType, index) => {
+    const args = await Promise.all(paramTypes.map(async (paramType, index) => {
       const customInjection = customInjections.find(ci => ci.index === index);
       const tokenToResolve = customInjection ? customInjection.token : paramType;
 
@@ -228,7 +230,7 @@ export class Container {
       }
 
       return this.resolve(tokenToResolve, moduleContext, resolutionStack);
-    });
+    }));
 
     return new clazz(...(args as never[]));
   }

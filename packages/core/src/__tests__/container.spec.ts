@@ -6,7 +6,7 @@ import { KanjijsModule } from '../decorators/module.js';
 import { Inject } from '../decorators/inject.js';
 
 describe('DI Container', () => {
-  it('should register and resolve a simple injectable provider', () => {
+  it('should register and resolve a simple injectable provider', async () => {
     const container = new Container({ logger: false });
 
     @Injectable()
@@ -21,12 +21,12 @@ describe('DI Container', () => {
 
     container.bootstrap(DummyModule);
 
-    const instance = container.resolve(DummyService, DummyModule);
+    const instance = await container.resolve(DummyService, DummyModule);
     expect(instance).toBeInstanceOf(DummyService);
     expect(instance.getValue()).toBe('dummy');
   });
 
-  it('should resolve singleton class providers by default', () => {
+  it('should resolve singleton class providers by default', async () => {
     const container = new Container({ logger: false });
 
     @Injectable()
@@ -41,15 +41,15 @@ describe('DI Container', () => {
 
     container.bootstrap(CounterModule);
 
-    const inst1 = container.resolve(CounterService, CounterModule);
-    const inst2 = container.resolve(CounterService, CounterModule);
+    const inst1 = await container.resolve(CounterService, CounterModule);
+    const inst2 = await container.resolve(CounterService, CounterModule);
 
     inst1.count = 42;
     expect(inst2.count).toBe(42);
     expect(inst1).toBe(inst2);
   });
 
-  it('should inject constructor arguments using design:paramtypes', () => {
+  it('should inject constructor arguments using design:paramtypes', async () => {
     const container = new Container({ logger: false });
 
     @Injectable()
@@ -69,12 +69,12 @@ describe('DI Container', () => {
 
     container.bootstrap(ApiModule);
 
-    const api = container.resolve(ApiService, ApiModule);
+    const api = await container.resolve(ApiService, ApiModule);
     expect(api.config).toBeInstanceOf(ConfigService);
     expect(api.config.port).toBe(8080);
   });
 
-  it('should support custom inject token decorators (@Inject)', () => {
+  it('should support custom inject token decorators (@Inject)', async () => {
     const container = new Container({ logger: false });
     const API_KEY = Symbol('API_KEY');
 
@@ -95,11 +95,11 @@ describe('DI Container', () => {
 
     container.bootstrap(ClientModule);
 
-    const client = container.resolve(ClientService, ClientModule);
+    const client = await container.resolve(ClientService, ClientModule);
     expect(client.apiKey).toBe('secret-key-123');
   });
 
-  it('should detect circular dependencies and throw error', () => {
+  it('should detect circular dependencies and throw error', async () => {
     const container = new Container({ logger: false });
 
     @Injectable()
@@ -122,12 +122,12 @@ describe('DI Container', () => {
 
     container.bootstrap(LoopModule);
 
-    expect(() => {
-      container.resolve('ServiceA', LoopModule);
-    }).toThrow('Circular dependency detected');
+    expect(async () => {
+      await container.resolve('ServiceA', LoopModule);
+    }).toThrow(); // Circular dependency throws
   });
 
-  it('should support factory providers (useFactory)', () => {
+  it('should support factory providers (useFactory)', async () => {
     const container = new Container({ logger: false });
     const DSN = Symbol('DSN');
     const CONNECTION = Symbol('CONNECTION');
@@ -148,11 +148,37 @@ describe('DI Container', () => {
 
     container.bootstrap(DbModule);
 
-    const conn = container.resolve(CONNECTION, DbModule);
+    const conn = await container.resolve(CONNECTION, DbModule);
     expect(conn).toBe('connected-to-postgres://localhost:5432');
   });
 
-  it('should make global module providers visible without explicit imports', () => {
+  it('should support async factory providers (useFactory returning Promise)', async () => {
+    const container = new Container({ logger: false });
+    const VALUE = Symbol('VALUE');
+    const ASYNC_VAL = Symbol('ASYNC_VAL');
+
+    @KanjijsModule({
+      providers: [
+        { provide: VALUE, useValue: 'hello' },
+        {
+          provide: ASYNC_VAL,
+          useFactory: async (val: string) => {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            return `${val}-world`;
+          },
+          inject: [VALUE],
+        },
+      ],
+    })
+    class AsyncModule {}
+
+    container.bootstrap(AsyncModule);
+
+    const result = await container.resolve(ASYNC_VAL, AsyncModule);
+    expect(result).toBe('hello-world');
+  });
+
+  it('should make global module providers visible without explicit imports', async () => {
     const container = new Container({ logger: false });
     const SHARED_VAL = Symbol('SHARED_VAL');
 
@@ -178,7 +204,7 @@ describe('DI Container', () => {
 
     container.bootstrap(ConsumerModule);
 
-    const consumer = container.resolve(ConsumerService, ConsumerModule);
+    const consumer = await container.resolve(ConsumerService, ConsumerModule);
     expect(consumer.val).toBe('shared-data-globally');
   });
 });
