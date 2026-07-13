@@ -38,9 +38,9 @@ describe('ProductController', () => {
       .useValue(mockDb)
       .compile();
 
-    controller = module.get(ProductController);
-    service = module.get(ProductService);
-    repository = module.get(ProductRepository);
+    controller = await module.get(ProductController);
+    service = await module.get(ProductService);
+    repository = await module.get(ProductRepository);
   });
 
   describe('POST /', () => {

@@ -26,8 +26,8 @@ describe('Users API (E2E)', () => {
     });
     
     appInstance = app;
-    db = container.resolve(DATABASE_CLIENT, AppModule);
-    sessionProvider = container.resolve(SessionProvider, AppModule);
+    db = await container.resolve(DATABASE_CLIENT, AppModule);
+    sessionProvider = await container.resolve(SessionProvider, AppModule);
 
     // Direct Postgres connection via resolved DATABASE_CLIENT to seed the schema
     await db.raw(`
