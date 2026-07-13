@@ -13,9 +13,20 @@ export const KANJI_CTX = {
   AUTH_SESSION: 'kanji.auth.session',
   AUTH_ROLES: 'kanji.auth.roles',
   AUTH_PRINCIPAL: 'kanji.auth.principal',
+  AUTH_SCOPES: 'kanji.auth.scopes',
+  AUTHZ_CACHE: 'kanji.authz.cache',
+  AUTHZ_DECISION: 'kanji.authz.decision',
   REQUEST_ID: 'kanji.requestId',
   CONTAINER: 'kanji.container',
 } as const;
+
+export interface CorsOptions {
+  origin?: string | string[] | ((origin: string) => string);
+  allowMethods?: string[];
+  allowHeaders?: string[];
+  credentials?: boolean;
+  maxAge?: number;
+}
 
 export interface ContractMetadata {
   method: string;
@@ -30,6 +41,7 @@ export interface KanjijsPlatformOptions {
   validator?: Validator;
   logger?: KanjiLogger | boolean;
   requestLogger?: boolean;
+  cors?: CorsOptions | boolean;
 }
 
 export type KanjijsAdapterOptions = KanjijsPlatformOptions;

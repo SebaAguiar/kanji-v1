@@ -17,10 +17,14 @@ declare module 'hono' {
     'kanji.auth.session': Record<string, unknown>;
     'kanji.auth.roles': string[];
     'kanji.auth.principal': string;
+    'kanji.auth.scopes': string[];
+    'kanji.authz.cache': Map<string, { allowed: boolean; reason: string }>;
+    'kanji.authz.decision': { allowed: boolean; resource: string; action: string } | null;
     'kanji.requestId': string;
     'kanji.container': Container;
     'kanji.resource.read': Record<string, unknown>;
     'kanji.resource.update': Record<string, unknown>;
     'kanji.resource.delete': Record<string, unknown>;
+    'kanji.resource.create': Record<string, unknown>;
   }
 }

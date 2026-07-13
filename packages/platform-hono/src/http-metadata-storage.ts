@@ -51,4 +51,11 @@ export class HttpMetadataStorage {
     list.push(...middlewares);
     this.routeMiddlewares.set(key, list);
   }
+
+  public reset(): void {
+    this.controllers.clear();
+    this.routes.clear();
+    this.controllerMiddlewares.clear();
+    this.routeMiddlewares.clear();
+  }
 }

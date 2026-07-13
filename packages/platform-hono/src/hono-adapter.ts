@@ -2,8 +2,9 @@ import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage';
 import type { KanjijsAdapterOptions } from './types';
-import { KanjiLogger, DefaultConsoleLogger } from '@kanjijs/common';
+import { KanjiLogger, DefaultConsoleLogger, KanjiError, ValidationError } from '@kanjijs/common';
 import type { ValidationResult } from '@kanjijs/contracts';
+import { requestIdMiddleware } from './middleware/request-id.js';
 
 interface AuthModuleExport {
   createAuthMiddleware: (sessionProvider: object) => MiddlewareHandler;
@@ -31,6 +32,42 @@ export class KanjijsAdapter {
     container.bootstrap(rootModule);
 
     const app = new Hono();
+
+    // Request ID — always enabled, first middleware
+    app.use('*', requestIdMiddleware);
+
+    // Global exception filter
+    app.onError((err, c) => {
+      if (err instanceof ValidationError) {
+        return c.json(
+          { error: err.code, message: err.message, issues: err.issues },
+          err.statusCode as 422,
+        );
+      }
+
+      if (err instanceof KanjiError) {
+        return c.json(
+          { error: err.code, message: err.message, issues: [] },
+          err.statusCode as 400 | 401 | 403 | 404 | 409 | 500,
+        );
+      }
+
+      if (activeLogger) {
+        activeLogger.error(err.message, err.stack, 'ExceptionFilter');
+      }
+
+      return c.json(
+        { error: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred', issues: [] },
+        500,
+      );
+    });
+
+    // CORS
+    if (options.cors) {
+      const { cors } = await import('hono/cors');
+      const corsConfig = typeof options.cors === 'boolean' ? {} : options.cors;
+      app.use('*', cors(corsConfig));
+    }
 
     // Inject DI Container globally into Hono Context
     app.use('*', async (c, next) => {
