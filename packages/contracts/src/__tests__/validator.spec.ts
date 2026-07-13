@@ -70,7 +70,8 @@ describe('ZodValidator Middleware', () => {
 
     expect(response.status).toBe(400);
     const body = await response.json();
-    expect(body.error).toBe('Validation Failed');
+    expect(body.error).toBe('VALIDATION_ERROR');
+    expect(body.message).toBe('Request validation failed');
     expect(body.issues).toBeArray();
     expect(body.issues[0].path).toContain('email');
   });
