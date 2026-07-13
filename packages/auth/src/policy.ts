@@ -10,6 +10,7 @@ export interface ClpPermissionRule {
 export interface ClassLevelPermissions {
   create?: ClpPermissionRule | 'public' | 'authenticated';
   read?: ClpPermissionRule | 'public' | 'authenticated';
+  list?: ClpPermissionRule | 'public' | 'authenticated';
   update?: ClpPermissionRule | 'public' | 'authenticated';
   delete?: ClpPermissionRule | 'public' | 'authenticated';
 }
@@ -21,15 +22,16 @@ export interface AuthUser {
   roles: string[];
 }
 
-export interface ResourcePolicy {
-  canRead?(c: import('hono').Context, resource: Record<string, unknown>, user: AuthUser): Promise<boolean> | boolean;
-  canUpdate?(c: import('hono').Context, resource: Record<string, unknown>, user: AuthUser): Promise<boolean> | boolean;
-  canDelete?(c: import('hono').Context, resource: Record<string, unknown>, user: AuthUser): Promise<boolean> | boolean;
+export interface ResourcePolicy<R = Record<string, unknown>, U = AuthUser> {
+  canCreate?(c: import('hono').Context, resource: R, user: U): Promise<boolean> | boolean;
+  canRead?(c: import('hono').Context, resource: R, user: U): Promise<boolean> | boolean;
+  canUpdate?(c: import('hono').Context, resource: R, user: U): Promise<boolean> | boolean;
+  canDelete?(c: import('hono').Context, resource: R, user: U): Promise<boolean> | boolean;
 }
 
 export interface AclOptions {
   policy: Token<ResourcePolicy>;
-  action: 'read' | 'update' | 'delete';
+  action: 'create' | 'read' | 'update' | 'delete';
   resourceId?: (c: import('hono').Context) => string;
   resourceResolver: (c: import('hono').Context, id: string) => Promise<Record<string, unknown> | null>;
   hideExistence?: boolean;

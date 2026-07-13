@@ -16,10 +16,12 @@ export function createAuthMiddleware(sessionProvider: SessionProvider): Middlewa
           id: session.userId,
           email: session.email,
           name: session.name,
+          roles: session.roles,
         });
         c.set(KANJI_CTX.AUTH_SESSION as string, session);
         c.set(KANJI_CTX.AUTH_ROLES as string, session.roles);
         c.set(KANJI_CTX.AUTH_PRINCIPAL as string, session);
+        c.set(KANJI_CTX.AUTH_SCOPES as string, session.scopes);
       }
     }
 

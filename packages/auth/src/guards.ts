@@ -13,12 +13,21 @@ export const AuthGuard: MiddlewareHandler = async (c: Context, next: Next): Prom
 export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const method = c.req.method.toUpperCase();
-    let action: 'create' | 'read' | 'update' | 'delete' | null = null;
+    let action: 'create' | 'read' | 'list' | 'update' | 'delete' | null = null;
     
     if (method === 'POST') action = 'create';
     else if (method === 'GET') action = 'read';
     else if (method === 'PATCH' || method === 'PUT') action = 'update';
     else if (method === 'DELETE') action = 'delete';
+
+    // Distinguish list from read: if the route has no :id param and action is read,
+    // check if 'list' permission exists and use it instead
+    if (action === 'read') {
+      const hasIdParam = c.req.param('id') !== undefined && c.req.param('id') !== '';
+      if (!hasIdParam && permissions.list) {
+        action = 'list';
+      }
+    }
 
     if (!action) {
       return c.json({ error: 'Forbidden', message: 'Method not allowed for CLP validation' }, 403);
@@ -29,7 +38,7 @@ export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
       return c.json({ error: 'Forbidden', message: `No permissions defined for action "${action}"` }, 403);
     }
 
-    if (rule === 'public') {
+    if (rule === 'public' || (typeof rule === 'object' && rule.public === true)) {
       await next();
       return;
     }
@@ -45,7 +54,7 @@ export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
     }
 
     const ruleObj = rule as ClpPermissionRule;
-    if (ruleObj.public) {
+    if (ruleObj.authenticated) {
       await next();
       return;
     }
@@ -93,7 +102,9 @@ export function acl(options: AclOptions): MiddlewareHandler {
     const policyInstance = container.resolve(options.policy, options.contextModule);
 
     let isAuthorized = false;
-    if (options.action === 'read' && policyInstance.canRead) {
+    if (options.action === 'create' && policyInstance.canCreate) {
+      isAuthorized = await policyInstance.canCreate(c, resource, user);
+    } else if (options.action === 'read' && policyInstance.canRead) {
       isAuthorized = await policyInstance.canRead(c, resource, user);
     } else if (options.action === 'update' && policyInstance.canUpdate) {
       isAuthorized = await policyInstance.canUpdate(c, resource, user);

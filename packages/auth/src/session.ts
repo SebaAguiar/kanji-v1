@@ -57,4 +57,20 @@ export class SessionProvider {
       return null;
     }
   }
+
+  /**
+   * Verifies a token and regenerates it with a fresh expiry.
+   * Returns null if the token is invalid or expired.
+   */
+  public refreshToken(token: string, expiresInSeconds: number): string | null {
+    const session = this.verifyToken(token);
+    if (!session) return null;
+    return this.createToken({
+      userId: session.userId,
+      email: session.email,
+      name: session.name,
+      roles: session.roles,
+      scopes: session.scopes,
+    }, expiresInSeconds);
+  }
 }

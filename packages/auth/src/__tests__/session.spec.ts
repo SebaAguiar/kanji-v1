@@ -53,4 +53,31 @@ describe('SessionProvider JWT authentication', () => {
     const verified = provider.verifyToken(token);
     expect(verified).toBeNull();
   });
+
+  describe('refreshToken', () => {
+    it('should generate a new token from a valid token', () => {
+      const token = provider.createToken(mockSession, 3600);
+      const refreshed = provider.refreshToken(token, 7200);
+      expect(refreshed).toBeString();
+      expect(refreshed).not.toBeNull();
+
+      const decoded = provider.verifyToken(refreshed!);
+      expect(decoded).not.toBeNull();
+      expect(decoded!.userId).toBe(mockSession.userId);
+    });
+
+    it('should return null for an expired token', async () => {
+      const token = provider.createToken(mockSession, 0);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const refreshed = provider.refreshToken(token, 3600);
+      expect(refreshed).toBeNull();
+    });
+
+    it('should return null for a tampered token', () => {
+      const token = provider.createToken(mockSession, 3600);
+      const refreshed = provider.refreshToken(token + 'bad', 3600);
+      expect(refreshed).toBeNull();
+    });
+  });
 });

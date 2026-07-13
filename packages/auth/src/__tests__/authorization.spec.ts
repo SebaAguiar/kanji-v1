@@ -53,6 +53,71 @@ describe('clp (Class-Level Permissions)', () => {
     const res = await app.request('/posts', { method: 'DELETE' });
     expect(res.status).toBe(403);
   });
+
+  it('should allow access if user has any of the anyRole roles', async () => {
+    const app = new Hono();
+    const rule = clp({ delete: { anyRole: ['admin', 'moderator'] } });
+
+    app.delete('/posts', (c, next) => {
+      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['moderator'] });
+      return next();
+    }, rule, (c) => c.text('deleted'));
+
+    const res = await app.request('/posts', { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('deleted');
+  });
+
+  it('should allow access with public as object property', async () => {
+    const app = new Hono();
+    const rule = clp({ read: { public: true } });
+
+    app.get('/posts', rule, (c) => c.text('ok'));
+
+    const res = await app.request('/posts');
+    expect(res.status).toBe(200);
+  });
+
+  it('should allow access with authenticated as object property when user is present', async () => {
+    const app = new Hono();
+    const rule = clp({ read: { authenticated: true } });
+
+    app.get('/posts', (c, next) => {
+      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: [] });
+      return next();
+    }, rule, (c) => c.text('ok'));
+
+    const res = await app.request('/posts');
+    expect(res.status).toBe(200);
+  });
+
+  it('should block when action has no rule defined in permissions', async () => {
+    const app = new Hono();
+    const rule = clp({}); // empty — no rules defined
+
+    app.get('/posts', (c, next) => {
+      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: [] });
+      return next();
+    }, rule, (c) => c.text('ok'));
+
+    const res = await app.request('/posts');
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Forbidden');
+  });
+
+  it('should use list action for GET requests without :id param when list rule exists', async () => {
+    const app = new Hono();
+    const rule = clp({ list: { role: 'admin' } });
+
+    app.get('/posts', (c, next) => {
+      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['user'] });
+      return next();
+    }, rule, (c) => c.text('list-ok'));
+
+    const res = await app.request('/posts');
+    expect(res.status).toBe(403); // user is not admin
+  });
 });
 
 describe('acl (Access Control List)', () => {

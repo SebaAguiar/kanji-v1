@@ -6,3 +6,5 @@ export * from './middleware';
 export * from './guards';
 export * from './auth.module';
 export * from './policy';
+export * from './state-store';
+export * from './oauth.controller';

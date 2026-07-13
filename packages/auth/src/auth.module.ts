@@ -1,6 +1,7 @@
 import { KanjijsModule, type DynamicModule } from '@kanjijs/core';
 import { AUTH_CONFIG, SESSION_PROVIDER, type AuthConfig } from './types.js';
 import { SessionProvider } from './session.js';
+import { OAuthController } from './oauth.controller.js';
 
 @KanjijsModule({
   exports: [SessionProvider, SESSION_PROVIDER],
@@ -21,6 +22,7 @@ export class AuthModule {
           useClass: SessionProvider,
         },
       ],
+      controllers: [OAuthController],
       exports: [SessionProvider, SESSION_PROVIDER],
       global: true,
     };
