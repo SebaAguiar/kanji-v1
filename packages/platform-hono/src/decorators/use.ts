@@ -1,8 +1,8 @@
 import type { MiddlewareHandler } from 'hono';
 import { HttpMetadataStorage } from '../http-metadata-storage';
 
-export function Use(...middlewares: MiddlewareHandler[]): any {
-  return (target: object | Function, propertyKey?: string | symbol) => {
+export function Use(...middlewares: MiddlewareHandler[]): MethodDecorator {
+  return (target: object, propertyKey?: string | symbol) => {
     if (propertyKey) {
       HttpMetadataStorage.getInstance().registerRouteMiddleware(
         target.constructor,

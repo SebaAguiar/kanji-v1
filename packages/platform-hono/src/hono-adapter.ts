@@ -1,8 +1,13 @@
-import { Hono, type Context, type Handler } from 'hono';
+import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage';
 import type { KanjijsAdapterOptions } from './types';
 import { KanjiLogger, DefaultConsoleLogger } from '@kanjijs/common';
+import type { ValidationResult } from '@kanjijs/contracts';
+
+interface AuthModuleExport {
+  createAuthMiddleware: (sessionProvider: object) => MiddlewareHandler;
+}
 
 export class KanjijsAdapter {
   public static async create(
@@ -29,7 +34,7 @@ export class KanjijsAdapter {
 
     // Inject DI Container globally into Hono Context
     app.use('*', async (c, next) => {
-      (c as any).set('kanji.container', container);
+      c.set('kanji.container', container);
       await next();
     });
 
@@ -37,8 +42,8 @@ export class KanjijsAdapter {
     const sessionProviderToken = Symbol.for('kanji:session_provider');
     if (container.hasProvider(sessionProviderToken, rootModule)) {
       const sessionProvider = container.resolve(sessionProviderToken, rootModule);
-      const { createAuthMiddleware } = await import('@kanjijs/auth' as any);
-      app.use('*', createAuthMiddleware(sessionProvider as any));
+      const authModule = await import('@kanjijs/auth') as AuthModuleExport;
+      app.use('*', authModule.createAuthMiddleware(sessionProvider));
       if (activeLogger) {
         activeLogger.log('Session authentication middleware auto-wired', 'InstanceLoader');
       }
@@ -55,7 +60,7 @@ export class KanjijsAdapter {
 
     // Run granular contract validation checks
     const { ContractValidator, getControllerContract, ValidationSeverity } = await import('@kanjijs/contracts');
-    const validationResults: any[] = [];
+    const validationResults: ValidationResult[] = [];
     let hasErrors = false;
 
     for (const { controller } of controllers) {
