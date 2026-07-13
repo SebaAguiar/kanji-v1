@@ -1,8 +1,8 @@
-import { Controller, Post, Get, Patch, Delete } from '@kanjijs/platform-hono';
+import { Controller, Post, Get, Patch, Delete, getValidatedBody } from '@kanjijs/platform-hono';
 import { Contract } from '@kanjijs/contracts';
 import { type Context } from 'hono';
 import { ProductService } from './product.service.js';
-import { ProductContracts } from './product.contracts.js';
+import { ProductContracts, CreateProductInput } from './product.contracts.js';
 
 @Controller('/products')
 export class ProductController {
@@ -11,7 +11,7 @@ export class ProductController {
   @Post('/')
   @Contract(ProductContracts.create)
   async create(c: Context): Promise<Response> {
-    const input = c.get('kanji.validated.body');
+    const input = getValidatedBody<CreateProductInput>(c);
     const result = await this.productService.create(input);
     return c.json(result, 201);
   }
@@ -26,7 +26,7 @@ export class ProductController {
   @Get('/:id')
   @Contract(ProductContracts.findOne)
   async findOne(c: Context): Promise<Response> {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const result = await this.productService.findOne(id);
     if (!result) return c.json({ error: 'Not found' }, 404);
     return c.json(result, 200);
@@ -35,8 +35,8 @@ export class ProductController {
   @Patch('/:id')
   @Contract(ProductContracts.update)
   async update(c: Context): Promise<Response> {
-    const id = c.req.param('id');
-    const input = c.get('kanji.validated.body');
+    const id = c.req.param('id')!;
+    const input = getValidatedBody<Partial<CreateProductInput>>(c);
     const result = await this.productService.update(id, input);
     return c.json(result, 200);
   }
@@ -44,9 +44,8 @@ export class ProductController {
   @Delete('/:id')
   @Contract(ProductContracts.delete)
   async delete(c: Context): Promise<Response> {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const result = await this.productService.delete(id);
     return c.json(result, 200);
   }
-
 }

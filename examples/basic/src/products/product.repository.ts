@@ -19,12 +19,14 @@ export class ProductRepository {
   }
 
   async findAll(): Promise<ProductResponse[]> {
-    return this.db.query.products.select() as Promise<ProductResponse[]>;
+    const results = await this.db.query.products.select();
+    return results as any as ProductResponse[];
   }
 
   async findOne(id: string): Promise<ProductResponse | null> {
     const result = await this.db.query.products.select();
-    return result.find((item: any) => item.id === id) || null;
+    const found = result.find((item: any) => item.id === id);
+    return found ? (found as any as ProductResponse) : null;
   }
 
   async update(id: string, input: Partial<CreateProductInput>): Promise<ProductResponse> {
@@ -32,9 +34,8 @@ export class ProductRepository {
     return { id, name: input.name ?? '' };
   }
 
-  async delete(id: string): Promise<{ success: boolean }> {
+  async delete(_id: string): Promise<{ success: boolean }> {
     await this.db.query.products.delete();
     return { success: true };
   }
-
 }

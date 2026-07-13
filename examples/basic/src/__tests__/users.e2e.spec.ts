@@ -105,4 +105,75 @@ describe('Users API (E2E)', () => {
     expect(body.id).toBe('session-id-e2e');
     expect(body.email).toBe('e2e@example.com');
   });
+
+  describe('POST /auth/refresh', () => {
+    it('should refresh a valid token', async () => {
+      const token = sessionProvider.createToken(
+        {
+          userId: 'refresh-user',
+          email: 'refresh@example.com',
+          name: 'Refresh User',
+          roles: [],
+          scopes: [],
+        },
+        300
+      );
+
+      const response = await appInstance.request('/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.token).toBeString();
+      
+      const verified = sessionProvider.verifyToken(body.token);
+      expect(verified).not.toBeNull();
+      expect(verified!.userId).toBe('refresh-user');
+    });
+
+    it('should fail to refresh an expired token', async () => {
+      const token = sessionProvider.createToken(
+        {
+          userId: 'refresh-user',
+          email: 'refresh@example.com',
+          name: 'Refresh User',
+          roles: [],
+          scopes: [],
+        },
+        0
+      );
+
+      // wait to expire
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      const response = await appInstance.request('/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      expect(response.status).toBe(401);
+      const body = await response.json();
+      expect(body.error).toBe('Unauthorized');
+    });
+
+    it('should fail to refresh a tampered token', async () => {
+      const response = await appInstance.request('/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: 'bad-token' }),
+      });
+
+      expect(response.status).toBe(401);
+    });
+  });
 });

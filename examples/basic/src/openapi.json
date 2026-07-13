@@ -1,0 +1,509 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Basic API",
+    "version": "1.0.0",
+    "description": "Example app using Kanji Framework"
+  },
+  "paths": {
+    "/auth/signin/{provider}": {
+      "get": {
+        "summary": "signInWithProvider endpoint",
+        "tags": [
+          "OAuth"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "operationId": "signInWithProviderOAuth",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/auth/callback": {
+      "get": {
+        "summary": "oauthCallback endpoint",
+        "tags": [
+          "OAuth"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "operationId": "oauthCallbackOAuth"
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "getCurrentUser endpoint",
+        "tags": [
+          "OAuth"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "operationId": "getCurrentUserOAuth"
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "spec endpoint",
+        "tags": [
+          "OpenApi"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "operationId": "specOpenApi"
+      }
+    },
+    "/api/docs": {
+      "get": {
+        "summary": "docs endpoint",
+        "tags": [
+          "OpenApi"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "operationId": "docsOpenApi"
+      }
+    },
+    "/users": {
+      "post": {
+        "summary": "create endpoint",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Unique identifier for the user"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email",
+                      "description": "Email address"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Full name"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "inactive",
+                        "pending"
+                      ],
+                      "description": "The status of the user account"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Timestamp when the user was created"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "createUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "The user's primary email address"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minItems": 2,
+                    "description": "The user's full name"
+                  }
+                },
+                "required": [
+                  "email",
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "findAll endpoint",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Unique identifier for the user"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Email address"
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "Full name"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "inactive",
+                          "pending"
+                        ],
+                        "description": "The status of the user account"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Timestamp when the user was created"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "email",
+                      "name"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "operationId": "findAllUsers"
+      }
+    },
+    "/users/me": {
+      "get": {
+        "summary": "getMe endpoint",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "operationId": "getMeProfile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "login endpoint",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "operationId": "loginSession"
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "refresh endpoint",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "operationId": "refreshSession"
+      }
+    },
+    "/products": {
+      "post": {
+        "summary": "create endpoint",
+        "tags": [
+          "Product"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "createProduct",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minItems": 2
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "findAll endpoint",
+        "tags": [
+          "Product"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "findAllProduct"
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "summary": "findOne endpoint",
+        "tags": [
+          "Product"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "findOneProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "update endpoint",
+        "tags": [
+          "Product"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "updateProduct",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minItems": 2
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "delete endpoint",
+        "tags": [
+          "Product"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "operationId": "deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

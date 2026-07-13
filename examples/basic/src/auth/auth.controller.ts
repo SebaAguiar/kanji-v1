@@ -1,6 +1,7 @@
 import { Controller, Post } from '@kanjijs/platform-hono';
 import { Inject } from '@kanjijs/core';
 import { SESSION_PROVIDER, SessionProvider } from '@kanjijs/auth';
+import { OperationId } from '@kanjijs/openapi';
 import type { Context } from 'hono';
 
 @Controller('/auth')
@@ -11,6 +12,7 @@ export class AuthController {
   ) {}
 
   @Post('/login')
+  @OperationId('loginSession')
   async login(c: Context): Promise<Response> {
     const body = await c.req.json().catch(() => ({}));
     const email = body.email || 'guest@kanjijs.com';
@@ -29,5 +31,20 @@ export class AuthController {
     );
 
     return c.json({ token }, 200);
+  }
+
+  @Post('/refresh')
+  @OperationId('refreshSession')
+  async refresh(c: Context): Promise<Response> {
+    const body = await c.req.json().catch(() => ({}));
+    const token = body.token;
+    if (!token) {
+      return c.json({ error: 'Bad Request', message: 'Missing token parameter' }, 400);
+    }
+    const refreshed = this.session.refreshToken(token, 3600);
+    if (!refreshed) {
+      return c.json({ error: 'Unauthorized', message: 'Invalid or expired token' }, 401);
+    }
+    return c.json({ token: refreshed }, 200);
   }
 }

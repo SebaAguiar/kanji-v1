@@ -12,7 +12,7 @@ interface UserAuth {
 }
 
 @Injectable()
-export class ProductPolicy implements ResourcePolicy {
+export class ProductPolicy implements ResourcePolicy<ProductResource, UserAuth> {
   canRead(_c: Context, _resource: ProductResource, _user: UserAuth): boolean {
     return true;
   }

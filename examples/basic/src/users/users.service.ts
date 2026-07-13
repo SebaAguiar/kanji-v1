@@ -10,7 +10,7 @@ export class UsersService {
   ) {}
 
   async create(input: CreateUserInput) {
-    const id = Math.random().toString(36).substring(7);
+    const id = crypto.randomUUID();
     
     // We utilize the Database proxy query builder interface
     await this.db.query.users.insert({
@@ -19,10 +19,20 @@ export class UsersService {
       name: input.name,
     });
     
-    return { id, ...input };
+    return {
+      id,
+      ...input,
+      status: 'active' as const,
+      createdAt: new Date(),
+    };
   }
 
   async findAll() {
-    return this.db.query.users.select();
+    const results = await this.db.query.users.select();
+    return results.map((r: any) => ({
+      ...r,
+      status: 'active' as const,
+      createdAt: new Date(),
+    }));
   }
 }
