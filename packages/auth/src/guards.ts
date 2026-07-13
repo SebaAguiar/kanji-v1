@@ -99,7 +99,7 @@ export function acl(options: AclOptions): MiddlewareHandler {
     if (!container) {
       throw new Error('[Kanji] DI Container not found in Hono context.');
     }
-    const policyInstance = container.resolve(options.policy, options.contextModule);
+    const policyInstance = await container.resolve(options.policy, options.contextModule);
 
     let isAuthorized = false;
     if (options.action === 'create' && policyInstance.canCreate) {

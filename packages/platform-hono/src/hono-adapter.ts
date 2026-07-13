@@ -78,7 +78,7 @@ export class KanjijsAdapter {
     // Auto-wire session authentication middleware if AuthModule is present in DI container
     const sessionProviderToken = Symbol.for('kanji:session_provider');
     if (container.hasProvider(sessionProviderToken, rootModule)) {
-      const sessionProvider = container.resolve(sessionProviderToken, rootModule);
+      const sessionProvider = await container.resolve(sessionProviderToken, rootModule);
       const authModule = await import('@kanjijs/auth') as AuthModuleExport;
       app.use('*', authModule.createAuthMiddleware(sessionProvider));
       if (activeLogger) {
@@ -159,7 +159,7 @@ export class KanjijsAdapter {
         activeLogger.log(`${controller.name} {${controllerPath}}`, 'RoutesResolver');
       }
 
-      const controllerInstance = container.resolve(controller, moduleClass) as Record<
+      const controllerInstance = await container.resolve(controller, moduleClass) as Record<
         string | symbol,
         (c: Context) => Promise<Response> | Response
       >;

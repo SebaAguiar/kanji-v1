@@ -19,7 +19,7 @@ describe('TestingModule Builder', () => {
       imports: [HelloModule],
     }).compile();
 
-    const service = module.get(HelloService);
+    const service = await module.get(HelloService);
     expect(service).toBeInstanceOf(HelloService);
     expect(service.greet()).toBe('hello');
   });
@@ -49,6 +49,6 @@ describe('TestingModule Builder', () => {
       .useValue('mocked-value')
       .compile();
 
-    expect(module.get(MY_TOKEN)).toBe('mocked-value');
+    expect(await module.get(MY_TOKEN)).toBe('mocked-value');
   });
 });

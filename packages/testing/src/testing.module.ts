@@ -8,7 +8,7 @@ export class TestingModule {
     public readonly container: Container
   ) {}
 
-  public get<T extends object>(token: Token<T>): T {
+  public async get<T extends object>(token: Token<T>): Promise<T> {
     const instances = this.container.getInstances();
     if (instances.has(token)) {
       return instances.get(token) as T;
@@ -19,7 +19,7 @@ export class TestingModule {
 
     for (const mod of initializedModules) {
       try {
-        return this.container.resolve(token, mod);
+        return await this.container.resolve(token, mod);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
       }
@@ -30,7 +30,6 @@ export class TestingModule {
       (lastError ? ` Last resolution error: ${lastError.message}` : '')
     );
   }
-
 }
 
 export class TestingModuleBuilder {
@@ -78,7 +77,7 @@ export class TestingModuleBuilder {
         continue;
       }
 
-      const controllerInstance = container.resolve(controller, moduleClass) as Record<
+      const controllerInstance = await container.resolve(controller, moduleClass) as Record<
         string | symbol,
         (c: Context) => Promise<Response | void>
       >;
