@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import type { Token, Constructor } from '@kanjijs/core';
 
 export interface ClpPermissionRule {
   role?: string;
@@ -14,16 +14,24 @@ export interface ClassLevelPermissions {
   delete?: ClpPermissionRule | 'public' | 'authenticated';
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+}
+
 export interface ResourcePolicy {
-  canRead?(c: Context, resource: any, user: any): Promise<boolean> | boolean;
-  canUpdate?(c: Context, resource: any, user: any): Promise<boolean> | boolean;
-  canDelete?(c: Context, resource: any, user: any): Promise<boolean> | boolean;
+  canRead?(c: import('hono').Context, resource: Record<string, unknown>, user: AuthUser): Promise<boolean> | boolean;
+  canUpdate?(c: import('hono').Context, resource: Record<string, unknown>, user: AuthUser): Promise<boolean> | boolean;
+  canDelete?(c: import('hono').Context, resource: Record<string, unknown>, user: AuthUser): Promise<boolean> | boolean;
 }
 
 export interface AclOptions {
-  policy: any;
+  policy: Token<ResourcePolicy>;
   action: 'read' | 'update' | 'delete';
-  resourceId?: (c: Context) => string;
-  resourceResolver: (c: Context, id: string) => Promise<any>;
+  resourceId?: (c: import('hono').Context) => string;
+  resourceResolver: (c: import('hono').Context, id: string) => Promise<Record<string, unknown> | null>;
   hideExistence?: boolean;
+  contextModule: Constructor<object>;
 }

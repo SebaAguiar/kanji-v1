@@ -8,7 +8,7 @@ describe('AuthGuard', () => {
     const app = new Hono();
 
     app.get('/protected', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER as any, { id: '123' });
+      c.set(KANJI_CTX.AUTH_USER, { id: '123', email: '', name: '', roles: [] });
       return next();
     }, AuthGuard, (c) => c.text('Granted'));
 

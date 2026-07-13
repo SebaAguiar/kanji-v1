@@ -3,6 +3,8 @@ import { Hono } from 'hono';
 import { clp, acl } from '../guards';
 import { KANJI_CTX } from '@kanjijs/platform-hono';
 
+class DummyModule {}
+
 describe('clp (Class-Level Permissions)', () => {
   it('should allow public access if route action is public', async () => {
     const app = new Hono();
@@ -30,7 +32,7 @@ describe('clp (Class-Level Permissions)', () => {
     const rule = clp({ delete: { role: 'admin' } });
 
     app.delete('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER as any, { roles: ['admin'] });
+      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['admin'] });
       return next();
     }, rule, (c) => c.text('deleted'));
 
@@ -44,7 +46,7 @@ describe('clp (Class-Level Permissions)', () => {
     const rule = clp({ delete: { role: 'admin' } });
 
     app.delete('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER as any, { roles: ['user'] });
+      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['user'] });
       return next();
     }, rule, (c) => c.text('deleted'));
 
@@ -55,7 +57,7 @@ describe('clp (Class-Level Permissions)', () => {
 
 describe('acl (Access Control List)', () => {
   class MockPolicy {
-    canRead(c: any, resource: any, user: any) {
+    canRead(c: import('hono').Context, resource: Record<string, unknown>, user: { id: string }) {
       return resource.ownerId === user.id;
     }
   }
@@ -63,18 +65,19 @@ describe('acl (Access Control List)', () => {
   it('should allow access if policy evaluates to true', async () => {
     const app = new Hono();
     const mockContainer = {
-      resolve: (key: any) => new MockPolicy()
+      resolve: (_key: unknown, _mod: unknown) => new MockPolicy()
     };
 
     const guard = acl({
       policy: MockPolicy,
       action: 'read',
+      contextModule: DummyModule,
       resourceResolver: async (c, id) => ({ id, ownerId: 'user-1' })
     });
 
     app.get('/posts/:id', (c, next) => {
-      c.set(KANJI_CTX.CONTAINER as any, mockContainer);
-      c.set(KANJI_CTX.AUTH_USER as any, { id: 'user-1' });
+      c.set(KANJI_CTX.CONTAINER, mockContainer as never);
+      c.set(KANJI_CTX.AUTH_USER, { id: 'user-1', email: '', name: '', roles: [] });
       return next();
     }, guard, (c) => c.text('ok'));
 
@@ -86,18 +89,19 @@ describe('acl (Access Control List)', () => {
   it('should block access if policy evaluates to false', async () => {
     const app = new Hono();
     const mockContainer = {
-      resolve: (key: any) => new MockPolicy()
+      resolve: (_key: unknown, _mod: unknown) => new MockPolicy()
     };
 
     const guard = acl({
       policy: MockPolicy,
       action: 'read',
+      contextModule: DummyModule,
       resourceResolver: async (c, id) => ({ id, ownerId: 'user-2' })
     });
 
     app.get('/posts/:id', (c, next) => {
-      c.set(KANJI_CTX.CONTAINER as any, mockContainer);
-      c.set(KANJI_CTX.AUTH_USER as any, { id: 'user-1' });
+      c.set(KANJI_CTX.CONTAINER, mockContainer as never);
+      c.set(KANJI_CTX.AUTH_USER, { id: 'user-1', email: '', name: '', roles: [] });
       return next();
     }, guard, (c) => c.text('ok'));
 

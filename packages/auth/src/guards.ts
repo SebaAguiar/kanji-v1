@@ -86,11 +86,11 @@ export function acl(options: AclOptions): MiddlewareHandler {
       return c.json({ error: 'Not Found', message: 'Resource not found' }, 404);
     }
 
-    const container: any = c.get(KANJI_CTX.CONTAINER as string);
+    const container = c.get(KANJI_CTX.CONTAINER as string) as import('@kanjijs/core').Container | undefined;
     if (!container) {
       throw new Error('[Kanji] DI Container not found in Hono context.');
     }
-    const policyInstance = container.resolve(options.policy);
+    const policyInstance = container.resolve(options.policy, options.contextModule);
 
     let isAuthorized = false;
     if (options.action === 'read' && policyInstance.canRead) {

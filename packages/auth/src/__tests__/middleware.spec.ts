@@ -23,9 +23,9 @@ describe('Auth Middleware', () => {
 
     app.use('*', createAuthMiddleware(sessionProvider));
     
-    let ctxUser: any = null;
+    let ctxUser: { id: string; email: string; name: string; roles: string[] } | null = null;
     app.get('/me', (c) => {
-      ctxUser = c.get(KANJI_CTX.AUTH_USER as any);
+      ctxUser = c.get(KANJI_CTX.AUTH_USER);
       return c.text('OK');
     });
 
@@ -45,9 +45,9 @@ describe('Auth Middleware', () => {
     const app = new Hono();
     app.use('*', createAuthMiddleware(sessionProvider));
     
-    let ctxUser: any = undefined;
+    let ctxUser: { id: string; email: string; name: string; roles: string[] } | undefined;
     app.get('/me', (c) => {
-      ctxUser = c.get(KANJI_CTX.AUTH_USER as any);
+      ctxUser = c.get(KANJI_CTX.AUTH_USER);
       return c.text('OK');
     });
 
