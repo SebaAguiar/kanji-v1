@@ -5,7 +5,25 @@ import { ProductController } from '../product.controller.js';
 import { ProductService } from '../product.service.js';
 import { ProductRepository } from '../product.repository.js';
 import { DATABASE_CLIENT } from '@kanjijs/store';
-import { KanjijsModule } from '@kanjijs/core';
+
+const mockDb = {
+  query: {
+    products: {
+      insert: async () => {},
+      select: async () => [],
+    },
+  },
+  collection: () => ({ 
+    insertOne: async () => {},
+    find: () => ({ toArray: async () => [] }),
+    findOne: async () => null,
+    updateOne: async () => {},
+    deleteOne: async () => {},
+  }),
+  transaction: async <T>(fn: (trx: any) => Promise<T>) => fn(mockDb),
+  raw: async () => [],
+  disconnect: async () => {},
+};
 
 describe('ProductController', () => {
   let controller: ProductController;
@@ -13,34 +31,12 @@ describe('ProductController', () => {
   let repository: ProductRepository;
 
   beforeEach(async () => {
-    const mockDb = {
-      query: {
-        products: {
-          insert: async () => {},
-          select: async () => [],
-        },
-      },
-      collection: () => ({ 
-        insertOne: async () => {},
-        find: () => ({ toArray: async () => [] }),
-        findOne: async () => null,
-        updateOne: async () => {},
-        deleteOne: async () => {},
-      }),
-    };
-
-    @KanjijsModule({
-      providers: [
-        { provide: DATABASE_CLIENT, useValue: mockDb }
-      ],
-      exports: [DATABASE_CLIENT],
-      global: true
-    })
-    class MockDatabaseModule {}
-
     const module = await Test.createTestingModule({
-      imports: [MockDatabaseModule, ProductModule],
-    }).compile();
+      imports: [ProductModule],
+    })
+      .overrideProvider(DATABASE_CLIENT)
+      .useValue(mockDb)
+      .compile();
 
     controller = module.get(ProductController);
     service = module.get(ProductService);

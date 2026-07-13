@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { Container, type Token, type Constructor } from '@kanjijs/core';
+import type { HttpMetadataStorage as HttpMetadataStorageType } from '@kanjijs/platform-hono';
 
 export class TestingModule {
   constructor(
@@ -55,6 +56,7 @@ export class TestingModuleBuilder {
     const instancesMap = container.getInstances();
     for (const [token, mockValue] of this.overrides.entries()) {
       instancesMap.set(token, mockValue);
+      container.exposeGlobal(token);
     }
 
     const rootModule = this.imports[0];
@@ -66,7 +68,7 @@ export class TestingModuleBuilder {
 
     const app = new Hono();
     const { HttpMetadataStorage } = await import('@kanjijs/platform-hono');
-    const httpMetadata = HttpMetadataStorage.getInstance();
+    const httpMetadata: HttpMetadataStorageType = HttpMetadataStorage.getInstance();
 
     const controllers = container.getControllers();
 
@@ -95,11 +97,9 @@ export class TestingModuleBuilder {
           return controllerInstance[route.propertyKey](c);
         };
 
-        const method = route.method.toLowerCase();
-        const appInstance = app as unknown as Record<string, (path: string, ...handlers: unknown[]) => void>;
-        appInstance[method](fullPath, ...middlewaresToApply, handler);
-
-
+        const handlers = [...middlewaresToApply, handler] as import('hono').Handler[];
+        const appRef = app as unknown as Record<string, (path: string, ...h: import('hono').Handler[]) => void>;
+        appRef[route.method.toLowerCase()](fullPath, ...handlers);
       }
     }
 

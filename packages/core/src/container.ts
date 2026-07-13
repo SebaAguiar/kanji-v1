@@ -288,5 +288,9 @@ export class Container {
   public hasProvider(token: Token<object>, contextModule: Constructor<object>): boolean {
     return this.findProviderModule(token, contextModule) !== null;
   }
+
+  public exposeGlobal(token: Token<object>): void {
+    this.globalProviders.add(token);
+  }
 }
 
