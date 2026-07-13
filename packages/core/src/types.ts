@@ -36,6 +36,8 @@ export interface DynamicModule {
   module: Constructor<object>;
   imports?: Array<Constructor<object> | DynamicModule>;
   providers?: Array<Provider<object>>;
+  controllers?: Array<Constructor<object>>;
   exports?: Array<Token<object>>;
   global?: boolean;
 }
+

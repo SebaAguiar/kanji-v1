@@ -13,8 +13,15 @@
   },
   "peerDependencies": {
     "@kanjijs/common": "workspace:*",
+    "@kanjijs/core": "workspace:*",
     "@kanjijs/contracts": "workspace:*",
     "@kanjijs/platform-hono": "workspace:*",
+    "hono": "4.12.27",
     "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@kanjijs/core": "workspace:*",
+    "hono": "4.12.27"
   }
 }
+

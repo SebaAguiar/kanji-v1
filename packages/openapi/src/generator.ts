@@ -1,37 +1,57 @@
+import 'reflect-metadata';
+import { type ZodTypeAny } from 'zod';
 import { HttpMetadataStorage } from '@kanjijs/platform-hono';
 import { parseZodSchema } from './zod-parser.js';
-import type { 
-  OpenApiDocument, 
-  OpenApiPathItem, 
-  OpenApiOperation, 
-  OpenApiParameter, 
-  OpenApiRequestBody, 
-  OpenApiResponse 
+import {
+  OPENAPI_SUMMARY_KEY,
+  OPENAPI_DESCRIPTION_KEY,
+  OPENAPI_TAGS_KEY,
+} from './decorators.js';
+import type {
+  OpenApiDocument,
+  OpenApiPathItem,
+  OpenApiOperation,
+  OpenApiParameter,
+  OpenApiRequestBody,
+  OpenApiResponse,
+  OpenApiConfig,
 } from './types.js';
 import { writeFile } from 'fs/promises';
 
+interface ContractShape {
+  _def?: { shape?: () => Record<string, ZodTypeAny>; typeName?: string };
+  isOptional?: () => boolean;
+}
+
+function isContractShape(value: ZodTypeAny): value is ZodTypeAny & ContractShape {
+  return typeof value === 'object' && value !== null && '_def' in value;
+}
+
 export class OpenApiGenerator {
+  private readonly config: OpenApiConfig;
+
+  constructor(config: OpenApiConfig) {
+    this.config = config;
+  }
+
   public generateSpec(): OpenApiDocument {
     const httpMetadata = HttpMetadataStorage.getInstance();
     const doc: OpenApiDocument = {
       openapi: '3.0.0',
       info: {
-        title: 'Kanji API',
-        version: '1.0.0',
-        description: 'Auto-generated API documentation by Kanji Framework',
+        title: this.config.title,
+        version: this.config.version,
+        description: this.config.description,
       },
       paths: {},
     };
 
-    // 1. Recorrer los controladores registrados
     for (const [controller, controllerPath] of httpMetadata.controllers.entries()) {
       const routes = httpMetadata.routes.get(controller) || [];
 
       for (const route of routes) {
-        // Resolver el contrato guardado en los metadatos de la ruta
         const contract = Reflect.getMetadata('kanji:contract', controller.prototype, route.propertyKey);
-        
-        // Si no hay contrato, ignoramos o agregamos documentación básica sin schemas
+
         const fullPath = `${controllerPath}${route.path}`.replace(/\/+/g, '/');
         const cleanedPath = fullPath.endsWith('/') && fullPath !== '/' ? fullPath.slice(0, -1) : fullPath;
         const openApiPath = this.formatOpenApiPath(cleanedPath);
@@ -40,14 +60,18 @@ export class OpenApiGenerator {
           doc.paths[openApiPath] = {};
         }
 
+        const decoratorSummary = Reflect.getMetadata(OPENAPI_SUMMARY_KEY, controller.prototype, route.propertyKey);
+        const decoratorDescription = Reflect.getMetadata(OPENAPI_DESCRIPTION_KEY, controller.prototype, route.propertyKey);
+        const decoratorTags = Reflect.getMetadata(OPENAPI_TAGS_KEY, controller.prototype, route.propertyKey);
+
         const operation: OpenApiOperation = {
-          summary: `${route.propertyKey.toString()} endpoint`,
-          tags: [controller.name.replace(/Controller$/, '')],
+          summary: decoratorSummary ?? `${route.propertyKey.toString()} endpoint`,
+          description: decoratorDescription,
+          tags: decoratorTags ?? [controller.name.replace(/Controller$/, '')],
           responses: {},
         };
 
         if (contract) {
-          // Extraer request body, params, query, headers de forma robusta (directa o anidada en request)
           const requestBodySchema = contract.body || contract.request?.body;
           const querySchema = contract.query || contract.request?.query;
           const paramsSchema = contract.params || contract.request?.params;
@@ -55,20 +79,17 @@ export class OpenApiGenerator {
 
           const parameters: OpenApiParameter[] = [];
 
-          // Path params
-          if (paramsSchema && paramsSchema._def?.shape) {
-            const shape = paramsSchema._def.shape();
+          if (paramsSchema && isContractShape(paramsSchema) && paramsSchema._def?.shape) {
+            const shape = paramsSchema._def.shape() as Record<string, ZodTypeAny>;
             for (const [key, value] of Object.entries(shape)) {
               parameters.push({
                 name: key,
                 in: 'path',
                 required: true,
-                schema: parseZodSchema(value as any),
+                schema: parseZodSchema(value),
               });
             }
           } else {
-            // If the Hono path has parameters like :id but there is no params schema,
-            // add them generically as strings to comply with the OpenAPI spec
             const pathParams = openApiPath.match(/\{([a-zA-Z0-9_]+)\}/g);
             if (pathParams) {
               for (const p of pathParams) {
@@ -83,30 +104,26 @@ export class OpenApiGenerator {
             }
           }
 
-          // Query params
-          if (querySchema && querySchema._def?.shape) {
-            const shape = querySchema._def.shape();
+          if (querySchema && isContractShape(querySchema) && querySchema._def?.shape) {
+            const shape = querySchema._def.shape() as Record<string, ZodTypeAny>;
             for (const [key, value] of Object.entries(shape)) {
-              const val = value as any;
               parameters.push({
                 name: key,
                 in: 'query',
-                required: !val.isOptional() && val._def.typeName !== 'ZodOptional',
-                schema: parseZodSchema(val),
+                required: value._def?.typeName !== 'ZodOptional',
+                schema: parseZodSchema(value),
               });
             }
           }
 
-          // Headers
-          if (headersSchema && headersSchema._def?.shape) {
-            const shape = headersSchema._def.shape();
+          if (headersSchema && isContractShape(headersSchema) && headersSchema._def?.shape) {
+            const shape = headersSchema._def.shape() as Record<string, ZodTypeAny>;
             for (const [key, value] of Object.entries(shape)) {
-              const val = value as any;
               parameters.push({
                 name: key,
                 in: 'header',
-                required: !val.isOptional() && val._def.typeName !== 'ZodOptional',
-                schema: parseZodSchema(val),
+                required: value._def?.typeName !== 'ZodOptional',
+                schema: parseZodSchema(value),
               });
             }
           }
@@ -115,7 +132,6 @@ export class OpenApiGenerator {
             operation.parameters = parameters;
           }
 
-          // Request Body
           if (requestBodySchema) {
             const requestBody: OpenApiRequestBody = {
               required: true,
@@ -128,14 +144,13 @@ export class OpenApiGenerator {
             operation.requestBody = requestBody;
           }
 
-          // Responses
           if (contract.responses) {
             for (const [statusCode, schema] of Object.entries(contract.responses)) {
               const res: OpenApiResponse = {
                 description: `Response status ${statusCode}`,
                 content: {
                   'application/json': {
-                    schema: parseZodSchema(schema as any),
+                    schema: parseZodSchema(schema as ZodTypeAny),
                   },
                 },
               };
@@ -144,7 +159,6 @@ export class OpenApiGenerator {
           }
         }
 
-        // Si no se proveyeron respuestas en el contrato, documentamos una básica 200/201/204 por defecto
         if (Object.keys(operation.responses).length === 0) {
           const defaultStatus = route.method.toLowerCase() === 'post' ? '201' : '200';
           operation.responses[defaultStatus] = {
@@ -153,7 +167,7 @@ export class OpenApiGenerator {
         }
 
         const methodKey = route.method.toLowerCase() as keyof OpenApiPathItem;
-        doc.paths[openApiPath][methodKey] = operation as any;
+        doc.paths[openApiPath][methodKey] = operation;
       }
     }
 

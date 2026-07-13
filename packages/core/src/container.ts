@@ -10,7 +10,9 @@ export class Container {
   private readonly globalProviders = new Set<Token<object>>();
   private readonly providerRegistry = new Map<Constructor<object>, Map<Token<object>, Provider<object>>>();
   private readonly initializedModules = new Set<Constructor<object>>();
+  private readonly moduleControllers = new Map<Constructor<object>, Set<Constructor<object>>>();
   private readonly logger?: KanjiLogger;
+
 
   constructor(opts?: { logger?: KanjiLogger | boolean }) {
     if (opts?.logger === true || opts?.logger === undefined) {
@@ -41,6 +43,7 @@ export class Container {
     const localProviders = new Set<Token<object>>();
     const localExports = new Set<Token<object>>();
     const registry = new Map<Token<object>, Provider<object>>();
+    const localControllers = new Set<Constructor<object>>();
 
     if (metadata.imports) {
       for (const imported of metadata.imports) {
@@ -55,6 +58,13 @@ export class Container {
               if (imported.global) {
                 this.globalProviders.add(token);
               }
+            }
+          }
+          if (imported.controllers) {
+            for (const controller of imported.controllers) {
+              registry.set(controller, controller);
+              localProviders.add(controller);
+              localControllers.add(controller);
             }
           }
           if (imported.exports) {
@@ -84,6 +94,7 @@ export class Container {
       for (const controller of metadata.controllers) {
         registry.set(controller, controller);
         localProviders.add(controller);
+        localControllers.add(controller);
       }
     }
 
@@ -96,6 +107,7 @@ export class Container {
     this.moduleProviders.set(moduleClass, localProviders);
     this.moduleExports.set(moduleClass, localExports);
     this.providerRegistry.set(moduleClass, registry);
+    this.moduleControllers.set(moduleClass, localControllers);
 
     if (this.logger) {
       this.logger.log(`${moduleClass.name} dependencies initialized`, 'InstanceLoader');
@@ -274,12 +286,9 @@ export class Container {
 
   public getControllers(): Array<{ controller: Constructor<object>; module: Constructor<object> }> {
     const controllersList: Array<{ controller: Constructor<object>; module: Constructor<object> }> = [];
-    for (const moduleClass of this.initializedModules) {
-      const metadata = MetadataStorage.getInstance().modules.get(moduleClass);
-      if (metadata && metadata.controllers) {
-        for (const controller of metadata.controllers) {
-          controllersList.push({ controller, module: moduleClass });
-        }
+    for (const [moduleClass, controllers] of this.moduleControllers.entries()) {
+      for (const controller of controllers) {
+        controllersList.push({ controller, module: moduleClass });
       }
     }
     return controllersList;

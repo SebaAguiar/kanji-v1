@@ -77,3 +77,14 @@ export interface OpenApiDocument {
   paths: OpenApiPaths;
   components?: OpenApiComponents;
 }
+
+export interface OpenApiConfig {
+  title: string;
+  version: string;
+  description?: string;
+  specPath?: string;
+  docsPath?: string;
+}
+
+export const OPENAPI_CONFIG = Symbol.for('kanji:openapi_config');
+
