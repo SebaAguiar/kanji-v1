@@ -32,7 +32,6 @@ export class UsersController {
   @UseGuards(AuthGuard)
   @BearerAuth()
   @OperationId('getMeProfile')
-  // @Contract(UserContracts.getMe)
   async getMe(c: Context): Promise<Response> {
     const user = getAuthUser(c);
     return c.json(user, 200);

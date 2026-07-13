@@ -1,6 +1,6 @@
 /**
  * Auto-generated Client SDK for Kanji API
- * Generated at: 2026-07-13T15:34:20.350Z
+ * Generated at: 2026-07-13T15:40:42.741Z
  */
 
 export interface APIClientOptions {
