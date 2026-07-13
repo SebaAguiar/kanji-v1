@@ -1109,10 +1109,19 @@ program
         process.exit(1);
       }
 
-      await import(entryPath);
+      const pkgPath = join(process.cwd(), 'package.json');
+      let pkg: any = {};
+      try {
+        if (await fileExists(pkgPath)) {
+          pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+        }
+      } catch {}
 
       const { OpenApiGenerator } = await import('@kanjijs/openapi');
-      const generator = new OpenApiGenerator();
+      const generator = new OpenApiGenerator({
+        title: pkg.name ?? 'Kanji API',
+        version: pkg.version ?? '1.0.0'
+      });
       
       console.log(pc.cyan('Generating OpenAPI specification...'));
       await generator.generateToFile(outputPath);
