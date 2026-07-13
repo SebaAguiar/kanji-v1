@@ -211,18 +211,20 @@ export class MongoDatabase implements Database {
     if (!MongoLib) {
       // Injected Bun node:v8 compatibility patch encapsulated inside the adapter
       if (typeof globalThis.Bun !== 'undefined' && globalThis.process) {
-        const proc = globalThis.process as any;
+        const proc: { getBuiltinModule?: (name: string) => unknown } = globalThis.process as never;
         const originalGetBuiltin = proc.getBuiltinModule;
-        proc.getBuiltinModule = function (name: string) {
-          if (name === 'v8') {
-            return {
-              startupSnapshot: {
-                isBuildingSnapshot: () => false
-              }
-            };
-          }
-          return originalGetBuiltin ? originalGetBuiltin.call(this, name) : undefined;
-        };
+        if (originalGetBuiltin) {
+          proc.getBuiltinModule = function (name: string) {
+            if (name === 'v8') {
+              return {
+                startupSnapshot: {
+                  isBuildingSnapshot: () => false
+                }
+              };
+            }
+            return originalGetBuiltin.call(this, name);
+          };
+        }
       }
 
       MongoLib = await import('mongodb');
