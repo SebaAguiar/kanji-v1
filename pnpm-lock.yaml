@@ -38,6 +38,9 @@ importers:
       '@kanjijs/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@kanjijs/openapi':
+        specifier: workspace:*
+        version: link:../../packages/openapi
       '@kanjijs/platform-hono':
         specifier: workspace:*
         version: link:../../packages/platform-hono
@@ -125,6 +128,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   packages/contracts:
     dependencies:
@@ -170,6 +176,13 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      '@kanjijs/core':
+        specifier: workspace:*
+        version: link:../core
+      hono:
+        specifier: 4.12.27
+        version: 4.12.27
 
   packages/platform-hono:
     dependencies:
@@ -237,6 +250,9 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
+      '@kanjijs/store':
+        specifier: workspace:*
+        version: link:../store
       '@types/jsonwebtoken':
         specifier: ^9.0.8
         version: 9.0.10
