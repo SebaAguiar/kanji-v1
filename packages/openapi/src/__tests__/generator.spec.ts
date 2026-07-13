@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { HttpMetadataStorage, Controller, Get } from '@kanjijs/platform-hono';
 import { OpenApiGenerator } from '../generator.js';
-import { Summary, Tag } from '../decorators.js';
+import { Summary, Tag, BearerAuth, Deprecated, OperationId } from '../decorators.js';
 import type { OpenApiConfig } from '../types.js';
 
 const config: OpenApiConfig = { title: 'Test API', version: '0.0.1' };
@@ -15,6 +15,9 @@ export class ItemController {
   @Get('/')
   @Summary('Get all items')
   @Tag('Items')
+  @Deprecated()
+  @OperationId('customGetItems')
+  @BearerAuth()
   findAll() {}
 }
 
@@ -51,5 +54,32 @@ describe('OpenApiGenerator', () => {
     const spec = generator.generateSpec();
     const operation = spec.paths['/items']?.get;
     expect(operation?.tags).toEqual(['Items']);
+  });
+
+  it('reads @Deprecated decorator metadata into operation.deprecated', () => {
+    const generator = new OpenApiGenerator(config);
+    const spec = generator.generateSpec();
+    const operation = spec.paths['/items']?.get;
+    expect(operation?.deprecated).toBe(true);
+  });
+
+  it('reads @OperationId decorator metadata into operation.operationId', () => {
+    const generator = new OpenApiGenerator(config);
+    const spec = generator.generateSpec();
+    const operation = spec.paths['/items']?.get;
+    expect(operation?.operationId).toBe('customGetItems');
+  });
+
+  it('reads security decorators and populates components securitySchemes', () => {
+    const generator = new OpenApiGenerator(config);
+    const spec = generator.generateSpec();
+    const operation = spec.paths['/items']?.get;
+
+    expect(operation?.security).toEqual([{ bearerAuth: [] }]);
+    expect(spec.components?.securitySchemes?.bearerAuth).toEqual({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+    });
   });
 });

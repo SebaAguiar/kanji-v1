@@ -11,10 +11,17 @@ export interface OpenApiSchema {
   required?: string[];
   enum?: string[];
   format?: string;
+  pattern?: string;
   description?: string;
   nullable?: boolean;
   anyOf?: OpenApiSchema[];
   oneOf?: OpenApiSchema[];
+  additionalProperties?: OpenApiSchema | boolean;
+  allOf?: OpenApiSchema[];
+  prefixItems?: OpenApiSchema[];
+  minItems?: number;
+  maxItems?: number;
+  example?: unknown;
 }
 
 export interface OpenApiParameter {
@@ -44,6 +51,20 @@ export interface OpenApiResponse {
   };
 }
 
+export type SecuritySchemeType = 'apiKey' | 'http' | 'oauth2' | 'openIdConnect';
+
+export interface OpenApiSecurityScheme {
+  type: SecuritySchemeType;
+  scheme?: string;           // 'bearer', 'basic'
+  bearerFormat?: string;     // e.g. 'JWT'
+  name?: string;             // for apiKey
+  in?: 'query' | 'header' | 'cookie'; // for apiKey
+  flows?: Record<string, unknown>; // for oauth2
+  description?: string;
+}
+
+export type OpenApiSecurityRequirement = Record<string, string[]>;
+
 export interface OpenApiOperation {
   summary?: string;
   description?: string;
@@ -52,6 +73,8 @@ export interface OpenApiOperation {
   requestBody?: OpenApiRequestBody;
   responses: Record<string, OpenApiResponse>;
   tags?: string[];
+  deprecated?: boolean;
+  security?: OpenApiSecurityRequirement[];
 }
 
 export interface OpenApiPathItem {
@@ -68,7 +91,7 @@ export type OpenApiPaths = Record<string, OpenApiPathItem>;
 
 export interface OpenApiComponents {
   schemas?: Record<string, OpenApiSchema>;
-  securitySchemes?: Record<string, Record<string, unknown>>;
+  securitySchemes?: Record<string, OpenApiSecurityScheme>;
 }
 
 export interface OpenApiDocument {
@@ -87,4 +110,3 @@ export interface OpenApiConfig {
 }
 
 export const OPENAPI_CONFIG = Symbol.for('kanji:openapi_config');
-

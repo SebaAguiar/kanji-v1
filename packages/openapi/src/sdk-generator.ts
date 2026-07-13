@@ -9,6 +9,10 @@ export class SdkGenerator {
     // Helper: Mapear OpenApiSchema a tipo TS
     const schemaToTs = (schema?: OpenApiSchema): string => {
       if (!schema) return 'unknown';
+      
+      if (schema.allOf) {
+        return schema.allOf.map((s) => schemaToTs(s)).join(' & ');
+      }
       if (schema.anyOf) {
         return schema.anyOf.map((s) => schemaToTs(s)).join(' | ');
       }
@@ -33,15 +37,35 @@ export class SdkGenerator {
           typeStr = 'boolean';
           break;
         case 'array':
-          typeStr = `${schemaToTs(schema.items)}[]`;
+          if (schema.prefixItems) {
+            typeStr = `[${schema.prefixItems.map((s) => schemaToTs(s)).join(', ')}]`;
+          } else {
+            typeStr = `${schemaToTs(schema.items)}[]`;
+          }
           break;
         case 'object':
           if (schema.properties) {
             const props = Object.entries(schema.properties).map(([key, prop]) => {
               const isRequired = schema.required?.includes(key);
-              return `  ${key}${isRequired ? '' : '?'}: ${schemaToTs(prop)};`;
+              const jsdoc: string[] = [];
+              if (prop.format === 'date-time') {
+                jsdoc.push('  /** @format date-time */\n');
+              }
+              if (prop.description) {
+                jsdoc.push(`  /** ${prop.description} */\n`);
+              }
+              return `${jsdoc.join('')}  ${key}${isRequired ? '' : '?'}: ${schemaToTs(prop)};`;
             });
-            typeStr = `{\n${props.join('\n')}\n}`;
+            
+            let propStr = `{\n${props.join('\n')}\n}`;
+            if (schema.additionalProperties) {
+              const addPropsType = schema.additionalProperties === true ? 'unknown' : schemaToTs(schema.additionalProperties);
+              propStr = `(${propStr} & Record<string, ${addPropsType}>)`;
+            }
+            typeStr = propStr;
+          } else if (schema.additionalProperties) {
+            const addPropsType = schema.additionalProperties === true ? 'unknown' : schemaToTs(schema.additionalProperties);
+            typeStr = `Record<string, ${addPropsType}>`;
           } else {
             typeStr = 'Record<string, unknown>';
           }
@@ -57,12 +81,14 @@ export class SdkGenerator {
 
     // Helper: Nombre único de operación
     const getOperationName = (method: string, path: string): string => {
-      const parts = path.split('/').filter(Boolean);
+      const cleanedPath = path.replace(/\.[a-zA-Z0-9]+$/, '');
+      const parts = cleanedPath.split('/').filter(Boolean);
       const cleanParts = parts.map((p) => {
         if (p.startsWith('{') && p.endsWith('}')) {
           return 'By' + p.slice(1, -1).charAt(0).toUpperCase() + p.slice(2, -1);
         }
-        return p.charAt(0).toUpperCase() + p.slice(1);
+        const subParts = p.split(/[^a-zA-Z0-9]/).filter(Boolean);
+        return subParts.map((sp) => sp.charAt(0).toUpperCase() + sp.slice(1)).join('');
       });
       return `${method.toLowerCase()}${cleanParts.join('')}`;
     };
@@ -91,7 +117,14 @@ export class SdkGenerator {
           const queryInterfaceName = `${opCapitalized}Query`;
           const props = queryParams.map((p: OpenApiParameter) => {
             const isRequired = p.required;
-            return `  ${p.name}${isRequired ? '' : '?'}: ${schemaToTs(p.schema)};`;
+            const jsdoc: string[] = [];
+            if (p.schema?.format === 'date-time') {
+              jsdoc.push('  /** @format date-time */\n');
+            }
+            if (p.description) {
+              jsdoc.push(`  /** ${p.description} */\n`);
+            }
+            return `${jsdoc.join('')}  ${p.name}${isRequired ? '' : '?'}: ${schemaToTs(p.schema)};`;
           });
           interfaces.push(`export interface ${queryInterfaceName} {\n${props.join('\n')}\n}`);
           queryType = queryInterfaceName;
@@ -136,6 +169,11 @@ export class SdkGenerator {
         let jsPath = path.replace(/\{([a-zA-Z0-9_]+)\}/g, '${$1}');
 
         const methodLines: string[] = [];
+        if (op.deprecated) {
+          methodLines.push('  /**');
+          methodLines.push('   * @deprecated This endpoint is deprecated and may be removed in future versions.');
+          methodLines.push('   */');
+        }
         methodLines.push(`  async ${opName}(${methodArgs.join(', ')}): Promise<${successResponseInterface}> {`);
         
         const reqOpts: string[] = [];
