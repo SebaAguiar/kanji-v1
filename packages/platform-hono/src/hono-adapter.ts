@@ -174,8 +174,9 @@ export class KanjijsAdapter {
         const contract = Reflect.getMetadata('kanji:contract', controller.prototype, route.propertyKey);
         const middlewaresToApply = [...controllerMiddlewares];
 
-        if (contract && options.validator) {
-          middlewaresToApply.push(options.validator.validate(contract));
+        if (contract) {
+          const validator = options.validator ?? new (await import('@kanjijs/contracts')).ZodValidator();
+          middlewaresToApply.push(validator.validate(contract));
         }
 
         middlewaresToApply.push(...routeMiddlewares);
