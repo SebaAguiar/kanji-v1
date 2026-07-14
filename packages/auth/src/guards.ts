@@ -58,10 +58,6 @@ export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
       await next();
       return;
     }
-    if (ruleObj.authenticated) {
-      await next();
-      return;
-    }
 
     const userRoles: string[] = user.roles || [];
     if (ruleObj.role && !userRoles.includes(ruleObj.role)) {
