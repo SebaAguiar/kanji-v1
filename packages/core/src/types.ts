@@ -41,3 +41,15 @@ export interface DynamicModule {
   global?: boolean;
 }
 
+export interface OnModuleInit {
+  onModuleInit(): Promise<void> | void;
+}
+
+export interface OnApplicationBootstrap {
+  onApplicationBootstrap(): Promise<void> | void;
+}
+
+export interface OnDestroy {
+  onDestroy(): Promise<void> | void;
+}
+

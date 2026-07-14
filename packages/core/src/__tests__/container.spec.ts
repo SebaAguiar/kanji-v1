@@ -4,6 +4,7 @@ import { Container } from '../container.js';
 import { Injectable } from '../decorators/injectable.js';
 import { KanjijsModule } from '../decorators/module.js';
 import { Inject } from '../decorators/inject.js';
+import type { OnModuleInit, OnApplicationBootstrap, OnDestroy } from '../types.js';
 
 describe('DI Container', () => {
   it('should register and resolve a simple injectable provider', async () => {
@@ -19,7 +20,7 @@ describe('DI Container', () => {
     })
     class DummyModule {}
 
-    container.bootstrap(DummyModule);
+    await container.bootstrap(DummyModule);
 
     const instance = await container.resolve(DummyService, DummyModule);
     expect(instance).toBeInstanceOf(DummyService);
@@ -39,7 +40,7 @@ describe('DI Container', () => {
     })
     class CounterModule {}
 
-    container.bootstrap(CounterModule);
+    await container.bootstrap(CounterModule);
 
     const inst1 = await container.resolve(CounterService, CounterModule);
     const inst2 = await container.resolve(CounterService, CounterModule);
@@ -67,7 +68,7 @@ describe('DI Container', () => {
     })
     class ApiModule {}
 
-    container.bootstrap(ApiModule);
+    await container.bootstrap(ApiModule);
 
     const api = await container.resolve(ApiService, ApiModule);
     expect(api.config).toBeInstanceOf(ConfigService);
@@ -93,7 +94,7 @@ describe('DI Container', () => {
     })
     class ClientModule {}
 
-    container.bootstrap(ClientModule);
+    await container.bootstrap(ClientModule);
 
     const client = await container.resolve(ClientService, ClientModule);
     expect(client.apiKey).toBe('secret-key-123');
@@ -120,11 +121,9 @@ describe('DI Container', () => {
     })
     class LoopModule {}
 
-    container.bootstrap(LoopModule);
-
     expect(async () => {
-      await container.resolve('ServiceA', LoopModule);
-    }).toThrow(); // Circular dependency throws
+      await container.bootstrap(LoopModule);
+    }).toThrow();
   });
 
   it('should support factory providers (useFactory)', async () => {
@@ -146,7 +145,7 @@ describe('DI Container', () => {
     })
     class DbModule {}
 
-    container.bootstrap(DbModule);
+    await container.bootstrap(DbModule);
 
     const conn = await container.resolve(CONNECTION, DbModule);
     expect(conn).toBe('connected-to-postgres://localhost:5432');
@@ -172,7 +171,7 @@ describe('DI Container', () => {
     })
     class AsyncModule {}
 
-    container.bootstrap(AsyncModule);
+    await container.bootstrap(AsyncModule);
 
     const result = await container.resolve(ASYNC_VAL, AsyncModule);
     expect(result).toBe('hello-world');
@@ -202,9 +201,40 @@ describe('DI Container', () => {
     })
     class ConsumerModule {}
 
-    container.bootstrap(ConsumerModule);
+    await container.bootstrap(ConsumerModule);
 
     const consumer = await container.resolve(ConsumerService, ConsumerModule);
     expect(consumer.val).toBe('shared-data-globally');
+  });
+
+  it('should execute lifecycle hooks (OnModuleInit, OnApplicationBootstrap, OnDestroy) in correct order', async () => {
+    const container = new Container({ logger: false });
+    const events: string[] = [];
+
+    @Injectable()
+    class LifecycleService implements OnModuleInit, OnApplicationBootstrap, OnDestroy {
+      onModuleInit() {
+        events.push('init');
+      }
+
+      onApplicationBootstrap() {
+        events.push('bootstrap');
+      }
+
+      onDestroy() {
+        events.push('destroy');
+      }
+    }
+
+    @KanjijsModule({
+      providers: [LifecycleService],
+    })
+    class LifecycleModule {}
+
+    await container.bootstrap(LifecycleModule);
+    expect(events).toEqual(['init', 'bootstrap']);
+
+    await container.shutdown();
+    expect(events).toEqual(['init', 'bootstrap', 'destroy']);
   });
 });

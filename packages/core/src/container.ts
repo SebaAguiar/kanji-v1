@@ -25,8 +25,19 @@ export class Container {
     }
   }
 
-  public bootstrap(rootModule: Constructor<object>): void {
+  public async bootstrap(rootModule: Constructor<object>): Promise<void> {
     this.scanModule(rootModule);
+
+    // Eagerly resolve all registered providers across all modules
+    for (const [moduleClass, registry] of this.providerRegistry.entries()) {
+      for (const token of registry.keys()) {
+        await this.resolve(token, moduleClass);
+      }
+    }
+
+    // Call lifecycle hooks
+    await this.callLifecycleHooks('onModuleInit');
+    await this.callLifecycleHooks('onApplicationBootstrap');
   }
 
   private scanModule(moduleClass: Constructor<object>): void {
@@ -302,6 +313,29 @@ export class Container {
 
   public exposeGlobal(token: Token<object>): void {
     this.globalProviders.add(token);
+  }
+
+  public async shutdown(): Promise<void> {
+    if (this.logger) {
+      this.logger.log('Executing OnDestroy lifecycle hooks...', 'InstanceLoader');
+    }
+    const instancesArray = Array.from(this.instances.values()).reverse();
+    for (const instance of instancesArray) {
+      if (instance && typeof (instance as any).onDestroy === 'function') {
+        await (instance as any).onDestroy();
+      }
+    }
+  }
+
+  private async callLifecycleHooks(hook: 'onModuleInit' | 'onApplicationBootstrap'): Promise<void> {
+    if (this.logger) {
+      this.logger.log(`Executing ${hook} lifecycle hooks...`, 'InstanceLoader');
+    }
+    for (const [, instance] of this.instances) {
+      if (instance && typeof (instance as any)[hook] === 'function') {
+        await (instance as any)[hook]();
+      }
+    }
   }
 }
 
