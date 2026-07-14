@@ -397,8 +397,8 @@ export const getRepositoryTemplate = (name: string, options?: GeneratorOptions):
   if (crudActions.includes('findOne')) {
     content += `  async findOne(id: string): Promise<${singularCapitalized}Response | null> {\n`;
     if (dbAdapter === 'postgres') {
-      content += `    const result = await this.db.query.${name}.select();\n`;
-      content += `    return result.find((item: any) => item.id === id) || null;\n`;
+      content += `    const [result] = await this.db.query.${name}.where({ id }).select();\n`;
+      content += `    return result ?? null;\n`;
     } else if (dbAdapter === 'mongodb') {
       const dbCollection = `    const doc = await this.db.collection('${name}').findOne({ _id: id });\n`;
       content += dbCollection;
@@ -952,12 +952,16 @@ program
         dependencies: {
           "@kanjijs/core": "latest",
           "@kanjijs/platform-hono": "latest",
+          "@kanjijs/contracts": "latest",
+          "@kanjijs/store": "latest",
+          "@kanjijs/auth": "latest",
+          "@kanjijs/openapi": "latest",
           "hono": "^4.0.0",
           "zod": "^3.0.0",
           "reflect-metadata": "^0.2.2"
         },
         devDependencies: {
-          "typescript": "^5.0.0"
+          "typescript": "^6.0.3"
         }
       };
 
