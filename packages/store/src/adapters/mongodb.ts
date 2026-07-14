@@ -96,6 +96,22 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
     return this;
   }
 
+  async findById(id: string | number): Promise<T | null> {
+    this.type = 'select';
+    this.conditions = { id: id as DatabaseValue };
+    this.limitVal = 1;
+    const results = await this.then();
+    return results[0] ?? null;
+  }
+
+  async findBy(criteria: Record<string, DatabaseValue>): Promise<T | null> {
+    this.type = 'select';
+    this.conditions = criteria;
+    this.limitVal = 1;
+    const results = await this.then();
+    return results[0] ?? null;
+  }
+
   then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
     onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null

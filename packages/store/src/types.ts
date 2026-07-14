@@ -11,6 +11,11 @@ export interface QueryBuilder<T = Record<string, DatabaseValue>> {
   update(data: Record<string, DatabaseValue>): this;
   delete(): this;
 
+  /** Find a single record by its primary key (id). Resolves to the record or null. */
+  findById(id: string | number): Promise<T | null>;
+  /** Find a single record matching the given criteria. Resolves to the record or null. */
+  findBy(criteria: Record<string, DatabaseValue>): Promise<T | null>;
+
   // PromiseLike signature: resolves to an array of entity type T
   then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
