@@ -63,7 +63,7 @@ export class TestingModuleBuilder {
       throw new Error('TestingModuleBuilder: No root module provided in imports.');
     }
 
-    container.bootstrap(rootModule);
+    await container.bootstrap(rootModule);
 
     const app = new Hono();
     const { HttpMetadataStorage } = await import('@kanjijs/platform-hono');

@@ -14,7 +14,7 @@ export class KanjijsAdapter {
   public static async create(
     rootModule: Constructor<object>,
     options: KanjijsAdapterOptions = {},
-  ): Promise<{ app: Hono; container: Container }> {
+  ): Promise<{ app: Hono; container: Container; shutdown: () => Promise<void> }> {
     const bootstrapStart = performance.now();
 
     let activeLogger: KanjiLogger | undefined;
@@ -29,7 +29,7 @@ export class KanjijsAdapter {
     }
 
     const container = new Container({ logger: options.logger });
-    container.bootstrap(rootModule);
+    await container.bootstrap(rootModule);
 
     const app = new Hono();
 
@@ -198,7 +198,14 @@ export class KanjijsAdapter {
       activeLogger.log(`Kanji application successfully started (+${duration.toFixed(2)}ms)`, 'Kanji');
     }
 
-    return { app, container };
+    const shutdown = async () => {
+      if (activeLogger) {
+        activeLogger.log('Stopping Kanji application...', 'Kanji');
+      }
+      await container.shutdown();
+    };
+
+    return { app, container, shutdown };
   }
 
 }

@@ -30,7 +30,7 @@ describe('TestingModule Builder', () => {
     @Injectable()
     class ConsumerService {
       constructor(
-        @Inject('MY_TOKEN' as any) public readonly value: string
+        @Inject(MY_TOKEN) public readonly value: string
       ) {}
     }
 
