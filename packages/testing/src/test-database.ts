@@ -41,6 +41,20 @@ class MockQueryBuilder implements QueryBuilder<Record<string, DatabaseValue>> {
     return this;
   }
 
+  clear(): void {
+    this.data = [];
+  }
+
+  async findById(id: string | number): Promise<Record<string, DatabaseValue> | null> {
+    return this.data.find((item) => item.id === id || (item as any).id === id) ?? null;
+  }
+
+  async findBy(criteria: Record<string, DatabaseValue>): Promise<Record<string, DatabaseValue> | null> {
+    return this.data.find((item) =>
+      Object.entries(criteria).every(([key, val]) => item[key] === val)
+    ) ?? null;
+  }
+
   then<TResult1 = Record<string, DatabaseValue>[], TResult2 = never>(
     onfulfilled?: ((value: Record<string, DatabaseValue>[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
     onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
@@ -63,7 +77,7 @@ export function createMockDatabase(): Database {
     return tables.get(tableName)!;
   };
 
-  return {
+  const db = {
     query: new Proxy({} as Database['query'], {
       get: (_target, prop) => {
         if (typeof prop === 'string') {
@@ -81,9 +95,18 @@ export function createMockDatabase(): Database {
     disconnect: async (): Promise<void> => {
       tables.clear();
     },
+    __tables: tables,
   };
+
+  return db as Database & { __tables: Map<string, MockQueryBuilder> };
 }
 
 export function clearMockDatabase(db: Database): void {
-  void db;
+  const mockDb = db as { __tables?: Map<string, MockQueryBuilder> };
+  if (mockDb.__tables) {
+    for (const builder of mockDb.__tables.values()) {
+      builder.clear();
+    }
+    mockDb.__tables.clear();
+  }
 }
