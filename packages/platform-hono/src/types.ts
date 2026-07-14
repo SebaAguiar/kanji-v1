@@ -42,6 +42,7 @@ export interface KanjijsPlatformOptions {
   logger?: KanjiLogger | boolean;
   requestLogger?: boolean;
   cors?: CorsOptions | boolean;
+  exceptionFilters?: Array<new (...args: never[]) => any>;
 }
 
 export type KanjijsAdapterOptions = KanjijsPlatformOptions;

@@ -2,9 +2,10 @@ import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage';
 import type { KanjijsAdapterOptions } from './types';
-import { KanjiLogger, DefaultConsoleLogger, KanjiError, ValidationError } from '@kanjijs/common';
+import { KanjiLogger, DefaultConsoleLogger, KanjiError, ValidationError, getExceptionFilterTargets } from '@kanjijs/common';
 import type { ValidationResult } from '@kanjijs/contracts';
 import { requestIdMiddleware } from './middleware/request-id.js';
+import { ExceptionFilterService } from './exception-filter.service.js';
 
 interface AuthModuleExport {
   createAuthMiddleware: (sessionProvider: object) => MiddlewareHandler;
@@ -31,13 +32,30 @@ export class KanjijsAdapter {
     const container = new Container({ logger: options.logger });
     await container.bootstrap(rootModule);
 
+    const filterService = new ExceptionFilterService();
+    if (options.exceptionFilters) {
+      for (const filterClass of options.exceptionFilters) {
+        container.registerProvider(rootModule, filterClass);
+        const instance = await container.resolve(filterClass, rootModule);
+        const targets = getExceptionFilterTargets(filterClass);
+        if (targets && instance) {
+          filterService.register(instance as any, targets);
+        }
+      }
+    }
+
     const app = new Hono();
 
     // Request ID — always enabled, first middleware
     app.use('*', requestIdMiddleware);
 
     // Global exception filter
-    app.onError((err, c) => {
+    app.onError(async (err, c) => {
+      const filterResponse = await filterService.handle(err, c);
+      if (filterResponse) {
+        return filterResponse;
+      }
+
       if (err instanceof ValidationError) {
         return c.json(
           { error: err.code, message: err.message, issues: err.issues },

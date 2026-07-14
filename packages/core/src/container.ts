@@ -315,6 +315,23 @@ export class Container {
     this.globalProviders.add(token);
   }
 
+  public registerProvider(moduleClass: Constructor<object>, provider: Provider<object>): void {
+    const token = typeof provider === 'function' ? provider : provider.provide;
+    let registry = this.providerRegistry.get(moduleClass);
+    if (!registry) {
+      registry = new Map<Token<object>, Provider<object>>();
+      this.providerRegistry.set(moduleClass, registry);
+    }
+    registry.set(token, provider);
+
+    let localProviders = this.moduleProviders.get(moduleClass);
+    if (!localProviders) {
+      localProviders = new Set<Token<object>>();
+      this.moduleProviders.set(moduleClass, localProviders);
+    }
+    localProviders.add(token);
+  }
+
   public async shutdown(): Promise<void> {
     if (this.logger) {
       this.logger.log('Executing OnDestroy lifecycle hooks...', 'InstanceLoader');
