@@ -10,7 +10,7 @@ import {
   getTestTemplate,
   detectDatabaseFromAppModule,
   getPolicyTemplate
-} from '../cli.js';
+} from '../index.js';
 
 describe('CLI Generate Command', () => {
   let tmpProjectDir: string;

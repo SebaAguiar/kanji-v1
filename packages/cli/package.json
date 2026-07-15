@@ -1,8 +1,8 @@
 {
   "name": "@kanjijs/cli",
   "version": "1.0.0-alpha.1",
-  "main": "./dist/cli.js",
-  "types": "./dist/cli.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "bin": {
     "kanji": "./dist/cli.js"
