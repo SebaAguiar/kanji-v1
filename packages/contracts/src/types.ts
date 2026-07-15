@@ -13,3 +13,9 @@ export interface KanjiContract {
   };
   responses: Record<number, z.ZodTypeAny>;
 }
+
+export interface WebSocketContract {
+  body: z.ZodTypeAny;
+}
+
+export type KanjiContractUnion = KanjiContract | WebSocketContract;

@@ -1,8 +1,8 @@
 import 'reflect-metadata';
-import type { KanjiContract } from '../types';
+import type { KanjiContractUnion } from '../types';
 import { captureLocation } from '../validation';
 
-export function Contract(schema: KanjiContract): MethodDecorator {
+export function Contract(schema: KanjiContractUnion): MethodDecorator {
   return (target: object, propertyKey: string | symbol) => {
     Reflect.defineMetadata("kanji:contract", schema, target, propertyKey);
 

@@ -11,6 +11,7 @@ export class Container {
   private readonly providerRegistry = new Map<Constructor<object>, Map<Token<object>, Provider<object>>>();
   private readonly initializedModules = new Set<Constructor<object>>();
   private readonly moduleControllers = new Map<Constructor<object>, Set<Constructor<object>>>();
+  private readonly moduleGateways = new Map<Constructor<object>, Set<Constructor<object>>>();
   private readonly logger?: KanjiLogger;
 
 
@@ -55,6 +56,7 @@ export class Container {
     const localExports = new Set<Token<object>>();
     const registry = new Map<Token<object>, Provider<object>>();
     const localControllers = new Set<Constructor<object>>();
+    const localGateways = new Set<Constructor<object>>();
 
     if (metadata.imports) {
       for (const imported of metadata.imports) {
@@ -76,6 +78,13 @@ export class Container {
               registry.set(controller, controller);
               localProviders.add(controller);
               localControllers.add(controller);
+            }
+          }
+          if (imported.gateways) {
+            for (const gateway of imported.gateways) {
+              registry.set(gateway, gateway);
+              localProviders.add(gateway);
+              localGateways.add(gateway);
             }
           }
           if (imported.exports) {
@@ -109,6 +118,14 @@ export class Container {
       }
     }
 
+    if (metadata.gateways) {
+      for (const gateway of metadata.gateways) {
+        registry.set(gateway, gateway);
+        localProviders.add(gateway);
+        localGateways.add(gateway);
+      }
+    }
+
     if (metadata.exports) {
       for (const exp of metadata.exports) {
         localExports.add(exp);
@@ -119,6 +136,7 @@ export class Container {
     this.moduleExports.set(moduleClass, localExports);
     this.providerRegistry.set(moduleClass, registry);
     this.moduleControllers.set(moduleClass, localControllers);
+    this.moduleGateways.set(moduleClass, localGateways);
 
     if (this.logger) {
       this.logger.log(`${moduleClass.name} dependencies initialized`, 'InstanceLoader');
@@ -305,6 +323,16 @@ export class Container {
       }
     }
     return controllersList;
+  }
+
+  public getGateways(): Array<{ gateway: Constructor<object>; module: Constructor<object> }> {
+    const gatewaysList: Array<{ gateway: Constructor<object>; module: Constructor<object> }> = [];
+    for (const [moduleClass, gateways] of this.moduleGateways.entries()) {
+      for (const gateway of gateways) {
+        gatewaysList.push({ gateway, module: moduleClass });
+      }
+    }
+    return gatewaysList;
   }
 
   public hasProvider(token: Token<object>, contextModule: Constructor<object>): boolean {

@@ -12,6 +12,7 @@ export class MetadataStorage {
   public readonly injectables = new Set<Constructor<object>>();
   public readonly customInjections = new Map<Constructor<object>, CustomInjectionMetadata[]>();
   public readonly controllers = new Set<Constructor<object>>();
+  public readonly gateways = new Set<Constructor<object>>();
 
   private constructor() {}
 
@@ -42,5 +43,9 @@ export class MetadataStorage {
 
   public registerController(target: Constructor<object>): void {
     this.controllers.add(target);
+  }
+
+  public registerGateway(target: Constructor<object>): void {
+    this.gateways.add(target);
   }
 }

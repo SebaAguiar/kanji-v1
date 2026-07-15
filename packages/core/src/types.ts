@@ -27,6 +27,7 @@ export type Provider<T = object> =
 export interface ModuleMetadata {
   imports?: Array<Constructor<object> | DynamicModule>;
   controllers?: Array<Constructor<object>>;
+  gateways?: Array<Constructor<object>>;
   providers?: Array<Provider<object>>;
   exports?: Array<Token<object>>;
   global?: boolean;
@@ -37,6 +38,7 @@ export interface DynamicModule {
   imports?: Array<Constructor<object> | DynamicModule>;
   providers?: Array<Provider<object>>;
   controllers?: Array<Constructor<object>>;
+  gateways?: Array<Constructor<object>>;
   exports?: Array<Token<object>>;
   global?: boolean;
 }

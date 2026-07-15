@@ -15,7 +15,17 @@ export class KanjijsAdapter {
   public static async create(
     rootModule: Constructor<object>,
     options: KanjijsAdapterOptions = {},
-  ): Promise<{ app: Hono; container: Container; shutdown: () => Promise<void> }> {
+  ): Promise<{
+    app: Hono;
+    container: Container;
+    serve: (options?: {
+      port?: number;
+      hostname?: string;
+      tls?: import('bun').TLSOptions;
+    }) => ReturnType<typeof Bun.serve>;
+    shutdown: (options?: { force?: boolean }) => Promise<void>;
+    websocket?: import('hono/bun').BunWebSocketHandler<import('hono/bun').BunWebSocketData>;
+  }> {
     const bootstrapStart = performance.now();
 
     let activeLogger: KanjiLogger | undefined;
@@ -212,19 +222,111 @@ export class KanjijsAdapter {
       }
     }
 
+    // ============================================================
+    // WebSocket Gateway registration
+    // ============================================================
+    const gateways = container.getGateways();
+    let websocketHandler: import('hono/bun').BunWebSocketHandler<import('hono/bun').BunWebSocketData> | undefined = undefined;
+
+    if (gateways.length > 0) {
+      const { WsMetadataStorage, WsGatewayHandler } = await import('./gateway/index.js');
+      const wsMetadata = WsMetadataStorage.getInstance();
+      const wsHandler = new WsGatewayHandler(activeLogger);
+
+      for (const { gateway, module: moduleClass } of gateways) {
+        const wsPath = wsMetadata.gateways.get(gateway);
+        if (!wsPath) {
+          throw new Error(
+            `Gateway "${gateway.name}" registered in module "${moduleClass.name}" is missing @WebSocketGateway() decorator`,
+          );
+        }
+
+        if (activeLogger) {
+          activeLogger.log(`${gateway.name} {${wsPath}}`, 'WsGatewayResolver');
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const instance = await container.resolve(gateway, moduleClass) as Record<string | symbol, (...args: any[]) => unknown>;
+        const upgradeHandler = wsHandler.createUpgradeHandler(instance, gateway);
+
+        // Apply controller-level middlewares (e.g. @UseGuards(AuthGuard)) before upgrade
+        const controllerMiddlewares = httpMetadata.controllerMiddlewares.get(gateway) || [];
+        app.on('GET', [wsPath], ...controllerMiddlewares, upgradeHandler);
+
+        if (activeLogger) {
+          activeLogger.log(`Mapped WS gateway {${wsPath}}`, 'WsGatewayRouter');
+        }
+      }
+
+      const { websocket } = await import('hono/bun');
+      websocketHandler = websocket as import('hono/bun').BunWebSocketHandler<import('hono/bun').BunWebSocketData>;
+    }
+
     if (activeLogger) {
       const duration = performance.now() - bootstrapStart;
       activeLogger.log(`Kanji application successfully started (+${duration.toFixed(2)}ms)`, 'Kanji');
     }
 
-    const shutdown = async () => {
+    // Track the server instance for graceful shutdown
+    let serverInstance: ReturnType<typeof Bun.serve> | null = null;
+
+    // Start the Bun HTTP/WS server manually
+    const serve = (serveOptions?: {
+      port?: number;
+      hostname?: string;
+      tls?: import('bun').TLSOptions;
+    }): ReturnType<typeof Bun.serve> => {
+      const port = serveOptions?.port ?? 3000;
+      const hostname = serveOptions?.hostname;
+      const tls = serveOptions?.tls;
+
+      if (websocketHandler) {
+        serverInstance = Bun.serve({
+          fetch: app.fetch,
+          port,
+          ...(hostname ? { hostname } : {}),
+          ...(tls ? { tls } : {}),
+          websocket: websocketHandler,
+        });
+      } else {
+        serverInstance = Bun.serve({
+          fetch: app.fetch,
+          port,
+          ...(hostname ? { hostname } : {}),
+          ...(tls ? { tls } : {}),
+        });
+      }
+
       if (activeLogger) {
-        activeLogger.log('Stopping Kanji application...', 'Kanji');
+        activeLogger.log(
+          `Server listening on http://${hostname ?? 'localhost'}:${port}`,
+          'Kanji',
+        );
+      }
+
+      return serverInstance;
+    };
+
+    const shutdown = async (shutdownOptions?: { force?: boolean }): Promise<void> => {
+      if (activeLogger) {
+        activeLogger.log(
+          `Stopping Kanji application${shutdownOptions?.force ? ' (forced)' : ''}...`,
+          'Kanji',
+        );
+      }
+      if (serverInstance) {
+        serverInstance.stop(shutdownOptions?.force ?? false);
       }
       await container.shutdown();
     };
 
-    return { app, container, shutdown };
+    return {
+      app,
+      container,
+      serve,
+      shutdown,
+      ...(websocketHandler ? { websocket: websocketHandler } : {}),
+    };
   }
 
 }
