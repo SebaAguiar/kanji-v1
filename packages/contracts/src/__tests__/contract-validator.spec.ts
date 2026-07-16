@@ -26,7 +26,7 @@ describe('ContractValidator Bootstrap Validation', () => {
       'kanji:http:method',
       { method: 'GET', path: '/:id' },
       ValidController.prototype,
-      'getUser'
+      'getUser',
     );
 
     const results = ContractValidator.validate(ValidController, mockContract);
@@ -49,7 +49,7 @@ describe('ContractValidator Bootstrap Validation', () => {
     }
 
     const results = ContractValidator.validate(MissingRouteController, mockContract);
-    
+
     expect(results).toHaveLength(1);
     expect(results[0].severity).toBe(ValidationSeverity.ERROR);
     expect(results[0].message).toContain('but no HTTP method decorator');
@@ -74,7 +74,7 @@ describe('ContractValidator Bootstrap Validation', () => {
       'kanji:http:method',
       { method: 'POST', path: '/:id' }, // contract says PUT, route says POST
       MismatchController.prototype,
-      'updateUser'
+      'updateUser',
     );
 
     const results = ContractValidator.validate(MismatchController, mockContract);
@@ -100,7 +100,7 @@ describe('ContractValidator Bootstrap Validation', () => {
       'kanji:http:method',
       { method: 'GET', path: '/' },
       IncompleteController.prototype,
-      'listUsers'
+      'listUsers',
     );
 
     const results = ContractValidator.validate(IncompleteController, mockContract);

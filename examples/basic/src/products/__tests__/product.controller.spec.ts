@@ -13,7 +13,7 @@ const mockDb = {
       select: async () => [],
     },
   },
-  collection: () => ({ 
+  collection: () => ({
     insertOne: async () => {},
     find: () => ({ toArray: async () => [] }),
     findOne: async () => null,
@@ -56,5 +56,4 @@ describe('ProductController', () => {
       expect(controller).toBeDefined();
     });
   });
-
 });

@@ -75,22 +75,51 @@ export class OpenApiGenerator {
       const routes = httpMetadata.routes.get(controller) || [];
 
       for (const route of routes) {
-        const contract = Reflect.getMetadata('kanji:contract', controller.prototype, route.propertyKey);
+        const contract = Reflect.getMetadata(
+          'kanji:contract',
+          controller.prototype,
+          route.propertyKey,
+        );
 
         const fullPath = `${controllerPath}${route.path}`.replace(/\/+/g, '/');
-        const cleanedPath = fullPath.endsWith('/') && fullPath !== '/' ? fullPath.slice(0, -1) : fullPath;
+        const cleanedPath =
+          fullPath.endsWith('/') && fullPath !== '/' ? fullPath.slice(0, -1) : fullPath;
         const openApiPath = this.formatOpenApiPath(cleanedPath);
 
         if (!doc.paths[openApiPath]) {
           doc.paths[openApiPath] = {};
         }
 
-        const decoratorSummary = Reflect.getMetadata(OPENAPI_SUMMARY_KEY, controller.prototype, route.propertyKey);
-        const decoratorDescription = Reflect.getMetadata(OPENAPI_DESCRIPTION_KEY, controller.prototype, route.propertyKey);
-        const decoratorTags = Reflect.getMetadata(OPENAPI_TAGS_KEY, controller.prototype, route.propertyKey);
-        const deprecated = Reflect.getMetadata(OPENAPI_DEPRECATED_KEY, controller.prototype, route.propertyKey);
-        const security = Reflect.getMetadata(OPENAPI_SECURITY_KEY, controller.prototype, route.propertyKey);
-        const explicitId = Reflect.getMetadata(OPENAPI_OPERATIONID_KEY, controller.prototype, route.propertyKey);
+        const decoratorSummary = Reflect.getMetadata(
+          OPENAPI_SUMMARY_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
+        const decoratorDescription = Reflect.getMetadata(
+          OPENAPI_DESCRIPTION_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
+        const decoratorTags = Reflect.getMetadata(
+          OPENAPI_TAGS_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
+        const deprecated = Reflect.getMetadata(
+          OPENAPI_DEPRECATED_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
+        const security = Reflect.getMetadata(
+          OPENAPI_SECURITY_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
+        const explicitId = Reflect.getMetadata(
+          OPENAPI_OPERATIONID_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
 
         const operation: OpenApiOperation = {
           summary: decoratorSummary ?? `${route.propertyKey.toString()} endpoint`,
@@ -120,7 +149,11 @@ export class OpenApiGenerator {
                   bearerFormat: 'JWT',
                 };
               } else if (key === 'apiKey' && !securitySchemes.apiKey) {
-                const meta = Reflect.getMetadata('kanji:openapi:security:apikey', controller.prototype, route.propertyKey);
+                const meta = Reflect.getMetadata(
+                  'kanji:openapi:security:apikey',
+                  controller.prototype,
+                  route.propertyKey,
+                );
                 securitySchemes.apiKey = {
                   type: 'apiKey',
                   name: meta?.name || 'api_key',
@@ -166,7 +199,7 @@ export class OpenApiGenerator {
           if (paramsSchema && isContractShape(paramsSchema) && paramsSchema._def?.shape) {
             const shape = paramsSchema._def.shape() as Record<string, ZodTypeAny>;
             for (const [key, value] of Object.entries(shape)) {
-              const idx = parameters.findIndex(p => p.name === key && p.in === 'path');
+              const idx = parameters.findIndex((p) => p.name === key && p.in === 'path');
               const paramObj: OpenApiParameter = {
                 name: key,
                 in: 'path',

@@ -15,7 +15,7 @@ export const getControllerTemplate = (name: string, options?: GeneratorOptions):
 
   const methodsImport = Array.from(methodsUsed).join(', ');
   let content = `import { Controller, ${methodsImport || 'Get'} } from '@kanjijs/platform-hono';\n`;
-  
+
   if (crudActions.length > 0) {
     content += `import { Contract } from '@kanjijs/contracts';\n`;
   }
@@ -24,7 +24,7 @@ export const getControllerTemplate = (name: string, options?: GeneratorOptions):
   if (crudActions.length > 0) {
     content += `import { ${singularCapitalized}Contracts } from './${singular}.contracts.js';\n`;
   }
-  
+
   if (authModel !== 'none') {
     content += `import { UseGuards } from '@kanjijs/auth';\n`;
   }
@@ -35,7 +35,7 @@ export const getControllerTemplate = (name: string, options?: GeneratorOptions):
   } else if (authModel === 'owner-based') {
     content += `// @UseGuards(OwnerGuard)\n`;
   }
-  
+
   content += `export class ${singularCapitalized}Controller {\n`;
   content += `  constructor(private readonly ${singular}Service: ${singularCapitalized}Service) {}\n\n`;
 

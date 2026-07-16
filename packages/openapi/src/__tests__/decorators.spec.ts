@@ -26,7 +26,11 @@ describe('OpenAPI Decorators', () => {
       getItem() {}
     }
 
-    const description = Reflect.getMetadata(OPENAPI_DESCRIPTION_KEY, TestController.prototype, 'getItem');
+    const description = Reflect.getMetadata(
+      OPENAPI_DESCRIPTION_KEY,
+      TestController.prototype,
+      'getItem',
+    );
     expect(description).toBe('Get item full description');
   });
 

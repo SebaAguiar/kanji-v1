@@ -55,9 +55,9 @@ export type SecuritySchemeType = 'apiKey' | 'http' | 'oauth2' | 'openIdConnect';
 
 export interface OpenApiSecurityScheme {
   type: SecuritySchemeType;
-  scheme?: string;           // 'bearer', 'basic'
-  bearerFormat?: string;     // e.g. 'JWT'
-  name?: string;             // for apiKey
+  scheme?: string; // 'bearer', 'basic'
+  bearerFormat?: string; // e.g. 'JWT'
+  name?: string; // for apiKey
   in?: 'query' | 'header' | 'cookie'; // for apiKey
   flows?: Record<string, unknown>; // for oauth2
   description?: string;

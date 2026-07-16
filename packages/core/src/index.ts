@@ -5,4 +5,3 @@ export * from './decorators/injectable';
 export * from './decorators/inject';
 export * from './decorators/repository';
 export * from './container';
-

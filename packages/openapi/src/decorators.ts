@@ -28,22 +28,42 @@ export function Tag(...tags: string[]): MethodDecorator {
 export function BearerAuth(): MethodDecorator {
   return (target: object, propertyKey: string | symbol): void => {
     const existing = Reflect.getMetadata(OPENAPI_SECURITY_KEY, target, propertyKey) || [];
-    Reflect.defineMetadata(OPENAPI_SECURITY_KEY, [...existing, { bearerAuth: [] }], target, propertyKey);
+    Reflect.defineMetadata(
+      OPENAPI_SECURITY_KEY,
+      [...existing, { bearerAuth: [] }],
+      target,
+      propertyKey,
+    );
   };
 }
 
 export function ApiKey(name: string, location: 'query' | 'header' | 'cookie'): MethodDecorator {
   return (target: object, propertyKey: string | symbol): void => {
     const existing = Reflect.getMetadata(OPENAPI_SECURITY_KEY, target, propertyKey) || [];
-    Reflect.defineMetadata(OPENAPI_SECURITY_KEY, [...existing, { apiKey: [] }], target, propertyKey);
-    Reflect.defineMetadata('kanji:openapi:security:apikey', { name, in: location }, target, propertyKey);
+    Reflect.defineMetadata(
+      OPENAPI_SECURITY_KEY,
+      [...existing, { apiKey: [] }],
+      target,
+      propertyKey,
+    );
+    Reflect.defineMetadata(
+      'kanji:openapi:security:apikey',
+      { name, in: location },
+      target,
+      propertyKey,
+    );
   };
 }
 
 export function OAuth2(scopes: string[]): MethodDecorator {
   return (target: object, propertyKey: string | symbol): void => {
     const existing = Reflect.getMetadata(OPENAPI_SECURITY_KEY, target, propertyKey) || [];
-    Reflect.defineMetadata(OPENAPI_SECURITY_KEY, [...existing, { oauth2: scopes }], target, propertyKey);
+    Reflect.defineMetadata(
+      OPENAPI_SECURITY_KEY,
+      [...existing, { oauth2: scopes }],
+      target,
+      propertyKey,
+    );
   };
 }
 

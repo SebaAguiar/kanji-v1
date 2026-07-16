@@ -32,7 +32,11 @@ export function registerSdkCommand(program: Command) {
         console.log(pc.cyan('Generating TypeScript client SDK...'));
         await sdkGenerator.generateToFile(spec, outputPath);
 
-        console.log(pc.bold(pc.green(`\nTypeScript client SDK successfully generated at "${options.output}"! 🔌`)));
+        console.log(
+          pc.bold(
+            pc.green(`\nTypeScript client SDK successfully generated at "${options.output}"! 🔌`),
+          ),
+        );
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error(pc.red(`Error generating SDK: ${msg}`));

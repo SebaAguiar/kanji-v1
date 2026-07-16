@@ -17,7 +17,7 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
   constructor(
     private db: PostgresJsDatabase<Record<string, never>>,
     private table: PgTable,
-    private tableName: string
+    private tableName: string,
   ) {}
 
   select(fields?: string[]): this {
@@ -79,9 +79,9 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
     return results[0] ?? null;
   }
 
-    then<TResult1 = T[], TResult2 = never>(
+  then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
+    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null,
   ): Promise<TResult1 | TResult2> {
     const execute = async (): Promise<T[]> => {
       let result: T[];
@@ -90,9 +90,9 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
         let baseQuery;
 
         if (this.fields && this.fields.length > 0) {
-          const tableWithIndex = (this.table as object) as Record<string, PgColumn>;
+          const tableWithIndex = this.table as object as Record<string, PgColumn>;
           const selection: Record<string, PgColumn> = {};
-          
+
           for (const field of this.fields) {
             const column = tableWithIndex[field];
             if (!column) {
@@ -100,16 +100,15 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
             }
             selection[field] = column;
           }
-          
+
           baseQuery = this.db.select(selection).from(this.table);
         } else {
           baseQuery = this.db.select().from(this.table);
         }
 
-
         if (this.conditions) {
           const filters = Object.entries(this.conditions).map(([key, val]) => {
-            const tableWithIndex = (this.table as object) as Record<string, PgColumn>;
+            const tableWithIndex = this.table as object as Record<string, PgColumn>;
             const column = tableWithIndex[key];
             if (!column) {
               throw new Error(`Column '${key}' not found on table '${this.tableName}'`);
@@ -122,10 +121,12 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
         }
 
         if (this.orderByVal) {
-          const tableWithIndex = (this.table as object) as Record<string, PgColumn>;
+          const tableWithIndex = this.table as object as Record<string, PgColumn>;
           const column = tableWithIndex[this.orderByVal.field];
           if (!column) {
-            throw new Error(`Column '${this.orderByVal.field}' not found on table '${this.tableName}'`);
+            throw new Error(
+              `Column '${this.orderByVal.field}' not found on table '${this.tableName}'`,
+            );
           }
           const orderFn = this.orderByVal.direction === 'desc' ? desc(column) : asc(column);
           baseQuery = baseQuery.orderBy(orderFn) as typeof baseQuery;
@@ -145,7 +146,9 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
         if (!this.insertData) {
           throw new Error('Insert data is missing');
         }
-        const insertQuery = this.db.insert(this.table).values(this.insertData as Record<string, DatabaseValue>);
+        const insertQuery = this.db
+          .insert(this.table)
+          .values(this.insertData as Record<string, DatabaseValue>);
         const rows = await insertQuery.returning();
         result = rows as T[];
       } else if (this.type === 'update') {
@@ -156,7 +159,7 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
 
         if (this.conditions) {
           const filters = Object.entries(this.conditions).map(([key, val]) => {
-            const tableWithIndex = (this.table as object) as Record<string, PgColumn>;
+            const tableWithIndex = this.table as object as Record<string, PgColumn>;
             const column = tableWithIndex[key];
             if (!column) {
               throw new Error(`Column '${key}' not found on table '${this.tableName}'`);
@@ -174,7 +177,7 @@ export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements 
 
         if (this.conditions) {
           const filters = Object.entries(this.conditions).map(([key, val]) => {
-            const tableWithIndex = (this.table as object) as Record<string, PgColumn>;
+            const tableWithIndex = this.table as object as Record<string, PgColumn>;
             const column = tableWithIndex[key];
             if (!column) {
               throw new Error(`Column '${key}' not found on table '${this.tableName}'`);
@@ -210,18 +213,23 @@ export class PostgresDatabase implements Database {
   }
 
   get query() {
-    return new Proxy({}, {
-      get: (_target, prop) => {
-        if (typeof prop === 'string') {
-          const table = this.schema[prop];
-          if (!table) {
-            throw new Error(`Table '${prop}' not found in Drizzle schema. Make sure it is exported.`);
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          if (typeof prop === 'string') {
+            const table = this.schema[prop];
+            if (!table) {
+              throw new Error(
+                `Table '${prop}' not found in Drizzle schema. Make sure it is exported.`,
+              );
+            }
+            return new PostgresQueryBuilder(this.db, table as PgTable, prop);
           }
-          return new PostgresQueryBuilder(this.db, table as PgTable, prop);
-        }
-        return undefined;
-      }
-    }) as { [table: string]: QueryBuilder<Record<string, DatabaseValue>> };
+          return undefined;
+        },
+      },
+    ) as { [table: string]: QueryBuilder<Record<string, DatabaseValue>> };
   }
 
   async transaction<T>(fn: (trx: Database) => Promise<T>): Promise<T> {

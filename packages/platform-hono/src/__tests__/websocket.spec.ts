@@ -100,10 +100,12 @@ describe('WebSocket Support', () => {
     });
 
     // Send valid message
-    client.send(JSON.stringify({
-      event: 'ping',
-      data: { seq: 42 }
-    }));
+    client.send(
+      JSON.stringify({
+        event: 'ping',
+        data: { seq: 42 },
+      }),
+    );
 
     await messagePromise;
 
@@ -137,10 +139,12 @@ describe('WebSocket Support', () => {
     });
 
     // Send invalid payload (seq must be a number)
-    client.send(JSON.stringify({
-      event: 'ping',
-      data: { seq: 'not-a-number' }
-    }));
+    client.send(
+      JSON.stringify({
+        event: 'ping',
+        data: { seq: 'not-a-number' },
+      }),
+    );
 
     await errorPromise;
 
@@ -157,10 +161,10 @@ describe('WebSocket Support', () => {
   it('should start listening when serve() is called and stop when shutdown() is called', async () => {
     appInstance = await KanjijsAdapter.create(TestAppModule, { logger: false });
     port = 6000 + Math.floor(Math.random() * 1000);
-    
+
     // Register a simple HTTP test route to verify server state
     appInstance.app.get('/http-test', (c: any) => c.text('ok'));
-    
+
     appInstance.serve({ port });
 
     // Verify it is responding to HTTP requests

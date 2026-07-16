@@ -7,7 +7,9 @@ let MongoLib: typeof import('mongodb') | null = null;
 function toMongoQueryValue(val: DatabaseValue): DatabaseValue | ObjectId {
   if (typeof val === 'string' && val.length === 24 && /^[0-9a-fA-F]{24}$/.test(val)) {
     if (!MongoLib) {
-      throw new Error('MongoDB library is not initialized. Ensure connection has been established.');
+      throw new Error(
+        'MongoDB library is not initialized. Ensure connection has been established.',
+      );
     }
     return new MongoLib.ObjectId(val);
   }
@@ -31,7 +33,7 @@ function mapFilters(conditions?: Record<string, DatabaseValue>): Document {
 function normalizeDoc<T>(doc: Document): T {
   const { _id, ...rest } = doc;
   const normalized = {
-    id: _id && (typeof _id === 'object' && 'toString' in _id) ? _id.toString() : String(_id),
+    id: _id && typeof _id === 'object' && 'toString' in _id ? _id.toString() : String(_id),
     ...rest,
   };
   return normalized as T;
@@ -50,7 +52,7 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
   constructor(
     private db: Db | Promise<Db>,
     private collectionName: string,
-    private session?: ClientSession
+    private session?: ClientSession,
   ) {}
 
   select(fields?: string[]): this {
@@ -114,7 +116,7 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
 
   then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
+    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null,
   ): Promise<TResult1 | TResult2> {
     const execute = async (): Promise<T[]> => {
       const resolvedDb = await this.db;
@@ -176,7 +178,7 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
         }
 
         const query = mapFilters(this.conditions);
-        
+
         const docsToUpdate = await collection.find(query, options).toArray();
         const idsToUpdate = docsToUpdate.map((d) => d._id);
 
@@ -186,7 +188,9 @@ export class MongoQueryBuilder<T = Record<string, DatabaseValue>> implements Que
 
           await collection.updateMany({ _id: { $in: idsToUpdate } }, updateDoc, options);
 
-          const updatedDocs = await collection.find({ _id: { $in: idsToUpdate } }, options).toArray();
+          const updatedDocs = await collection
+            .find({ _id: { $in: idsToUpdate } }, options)
+            .toArray();
           result = updatedDocs.map(normalizeDoc) as T[];
         }
       } else if (this.type === 'delete') {
@@ -216,7 +220,7 @@ export class MongoDatabase implements Database {
 
   constructor(
     private readonly connectionString: string,
-    private readonly dbName?: string
+    private readonly dbName?: string,
   ) {}
 
   private async ensureConnected(): Promise<Db> {
@@ -234,8 +238,8 @@ export class MongoDatabase implements Database {
             if (name === 'v8') {
               return {
                 startupSnapshot: {
-                  isBuildingSnapshot: () => false
-                }
+                  isBuildingSnapshot: () => false,
+                },
               };
             }
             return originalGetBuiltin.call(this, name);
@@ -252,14 +256,17 @@ export class MongoDatabase implements Database {
   }
 
   get query() {
-    return new Proxy({}, {
-      get: (_target, prop) => {
-        if (typeof prop === 'string') {
-          return new MongoQueryBuilder(this.ensureConnected(), prop);
-        }
-        return undefined;
-      }
-    }) as { [table: string]: QueryBuilder<Record<string, DatabaseValue>> };
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          if (typeof prop === 'string') {
+            return new MongoQueryBuilder(this.ensureConnected(), prop);
+          }
+          return undefined;
+        },
+      },
+    ) as { [table: string]: QueryBuilder<Record<string, DatabaseValue>> };
   }
 
   async transaction<T>(fn: (trx: Database) => Promise<T>): Promise<T> {
@@ -274,20 +281,23 @@ export class MongoDatabase implements Database {
         const trxDb = new MongoDatabase(this.connectionString, this.dbName);
         trxDb.clientInstance = this.clientInstance;
         trxDb.dbInstance = db;
-        
+
         Object.defineProperty(trxDb, 'query', {
           get: () => {
-            return new Proxy({}, {
-              get: (_target, prop) => {
-                if (typeof prop === 'string') {
-                  return new MongoQueryBuilder(db, prop, session);
-                }
-                return undefined;
-              }
-            });
-          }
+            return new Proxy(
+              {},
+              {
+                get: (_target, prop) => {
+                  if (typeof prop === 'string') {
+                    return new MongoQueryBuilder(db, prop, session);
+                  }
+                  return undefined;
+                },
+              },
+            );
+          },
         });
-        
+
         result = await fn(trxDb);
       });
       return result;
@@ -300,12 +310,12 @@ export class MongoDatabase implements Database {
     const db = await this.ensureConnected();
     const commandObj = JSON.parse(query) as Document;
     const res = await db.command(commandObj);
-    
+
     if (res.cursor && res.cursor.firstBatch) {
       const batch = res.cursor.firstBatch as Document[];
       return batch.map(normalizeDoc) as Record<string, DatabaseValue>[];
     }
-    
+
     return [normalizeDoc(res)] as Record<string, DatabaseValue>[];
   }
 

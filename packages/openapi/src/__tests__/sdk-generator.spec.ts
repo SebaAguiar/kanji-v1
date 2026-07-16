@@ -19,12 +19,12 @@ describe('SdkGenerator', () => {
                   'application/json': {
                     schema: {
                       type: 'array',
-                      items: { type: 'string' }
-                    }
-                  }
-                }
-              }
-            }
+                      items: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
           },
           post: {
             requestBody: {
@@ -33,12 +33,12 @@ describe('SdkGenerator', () => {
                   schema: {
                     type: 'object',
                     properties: {
-                      name: { type: 'string' }
+                      name: { type: 'string' },
                     },
-                    required: ['name']
-                  }
-                }
-              }
+                    required: ['name'],
+                  },
+                },
+              },
             },
             responses: {
               '200': {
@@ -48,16 +48,16 @@ describe('SdkGenerator', () => {
                     schema: {
                       type: 'object',
                       properties: {
-                        id: { type: 'string' }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                        id: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -84,16 +84,16 @@ describe('SdkGenerator', () => {
                     schema: {
                       allOf: [
                         { type: 'object', properties: { foo: { type: 'string' } } },
-                        { type: 'object', properties: { bar: { type: 'number' } } }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                        { type: 'object', properties: { bar: { type: 'number' } } },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -115,18 +115,15 @@ describe('SdkGenerator', () => {
                 content: {
                   'application/json': {
                     schema: {
-                      oneOf: [
-                        { type: 'string' },
-                        { type: 'number' }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                      oneOf: [{ type: 'string' }, { type: 'number' }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -147,18 +144,15 @@ describe('SdkGenerator', () => {
                   'application/json': {
                     schema: {
                       type: 'array',
-                      prefixItems: [
-                        { type: 'string' },
-                        { type: 'number' }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                      prefixItems: [{ type: 'string' }, { type: 'number' }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -179,15 +173,15 @@ describe('SdkGenerator', () => {
                   'application/json': {
                     schema: {
                       type: 'object',
-                      additionalProperties: { type: 'string' }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                      additionalProperties: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -210,16 +204,20 @@ describe('SdkGenerator', () => {
                     schema: {
                       type: 'object',
                       properties: {
-                        created: { type: 'string', format: 'date-time', description: 'Creation date' }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                        created: {
+                          type: 'string',
+                          format: 'date-time',
+                          description: 'Creation date',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -242,15 +240,15 @@ describe('SdkGenerator', () => {
                   'application/json': {
                     schema: {
                       type: 'string',
-                      nullable: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                      nullable: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -271,15 +269,15 @@ describe('SdkGenerator', () => {
                   'application/json': {
                     schema: {
                       type: 'string',
-                      enum: ['active', 'inactive', 'pending']
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                      enum: ['active', 'inactive', 'pending'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
@@ -295,16 +293,18 @@ describe('SdkGenerator', () => {
           delete: {
             responses: {
               '204': {
-                description: 'No content'
-              }
-            }
-          }
-        }
-      }
+                description: 'No content',
+              },
+            },
+          },
+        },
+      },
     };
 
     const sdkCode = generator.generateSdk(doc);
-    expect(sdkCode).toContain('async deleteEmpty(options?: { headers?: Record<string, string> }): Promise<null>');
+    expect(sdkCode).toContain(
+      'async deleteEmpty(options?: { headers?: Record<string, string> }): Promise<null>',
+    );
     expect(sdkCode).toContain('return this.request<null>(');
   });
 });

@@ -19,10 +19,7 @@ export interface FactoryProvider<T = object> {
 }
 
 export type Provider<T = object> =
-  | Constructor<T>
-  | ValueProvider<T>
-  | ClassProvider<T>
-  | FactoryProvider<T>;
+  Constructor<T> | ValueProvider<T> | ClassProvider<T> | FactoryProvider<T>;
 
 export interface ModuleMetadata {
   imports?: Array<Constructor<object> | DynamicModule>;
@@ -54,4 +51,3 @@ export interface OnApplicationBootstrap {
 export interface OnDestroy {
   onDestroy(): Promise<void> | void;
 }
-

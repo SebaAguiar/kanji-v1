@@ -7,6 +7,8 @@ export function ContractOf(contracts: Record<string, KanjiContract>): ClassDecor
   };
 }
 
-export function getControllerContract(controllerClass: Function): Record<string, KanjiContract> | null {
+export function getControllerContract(
+  controllerClass: Function,
+): Record<string, KanjiContract> | null {
   return Reflect.getMetadata('kanji:contract-of', controllerClass) || null;
 }

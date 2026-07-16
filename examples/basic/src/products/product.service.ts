@@ -25,5 +25,4 @@ export class ProductService {
   async delete(id: string): Promise<{ success: boolean }> {
     return this.repository.delete(id);
   }
-
 }

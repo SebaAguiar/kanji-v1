@@ -24,7 +24,7 @@ describe('Users API (E2E)', () => {
       logger: false,
       validator: new ZodValidator(),
     });
-    
+
     appInstance = app;
     db = await container.resolve(DATABASE_CLIENT, AppModule);
     sessionProvider = await container.resolve(SessionProvider, AppModule);
@@ -91,7 +91,7 @@ describe('Users API (E2E)', () => {
         roles: [],
         scopes: [],
       },
-      300
+      300,
     );
 
     const response = await appInstance.request('/users/me', {
@@ -116,7 +116,7 @@ describe('Users API (E2E)', () => {
           roles: [],
           scopes: [],
         },
-        300
+        300,
       );
 
       const response = await appInstance.request('/auth/refresh', {
@@ -130,7 +130,7 @@ describe('Users API (E2E)', () => {
       expect(response.status).toBe(200);
       const body = await response.json();
       expect(body.token).toBeString();
-      
+
       const verified = sessionProvider.verifyToken(body.token);
       expect(verified).not.toBeNull();
       expect(verified!.userId).toBe('refresh-user');
@@ -145,11 +145,11 @@ describe('Users API (E2E)', () => {
           roles: [],
           scopes: [],
         },
-        0
+        0,
       );
 
       // wait to expire
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const response = await appInstance.request('/auth/refresh', {
         method: 'POST',

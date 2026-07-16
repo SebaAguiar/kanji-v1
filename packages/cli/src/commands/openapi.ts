@@ -8,7 +8,11 @@ export function registerOpenApiCommand(program: Command) {
   program
     .command('openapi:generate')
     .description('Generate OpenAPI 3.0.0 specification from application routes')
-    .option('--entry <entry>', 'Application entry file (e.g. src/main.ts or dist/main.js)', 'src/main.ts')
+    .option(
+      '--entry <entry>',
+      'Application entry file (e.g. src/main.ts or dist/main.js)',
+      'src/main.ts',
+    )
     .option('--output <output>', 'Path to write the generated JSON spec', 'openapi.json')
     .action(async (options: { entry: string; output: string }) => {
       const entryPath = join(process.cwd(), options.entry);
@@ -41,7 +45,11 @@ export function registerOpenApiCommand(program: Command) {
         console.log(pc.cyan('Generating OpenAPI specification...'));
         await generator.generateToFile(outputPath);
 
-        console.log(pc.bold(pc.green(`\nOpenAPI specification successfully generated at "${options.output}"! 📄`)));
+        console.log(
+          pc.bold(
+            pc.green(`\nOpenAPI specification successfully generated at "${options.output}"! 📄`),
+          ),
+        );
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error(pc.red(`Error generating OpenAPI spec: ${msg}`));

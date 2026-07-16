@@ -7,10 +7,15 @@ describe('AuthGuard', () => {
   it('should allow request if user is authenticated in context', async () => {
     const app = new Hono();
 
-    app.get('/protected', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '123', email: '', name: '', roles: [] });
-      return next();
-    }, AuthGuard, (c) => c.text('Granted'));
+    app.get(
+      '/protected',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '123', email: '', name: '', roles: [] });
+        return next();
+      },
+      AuthGuard,
+      (c) => c.text('Granted'),
+    );
 
     const res = await app.request('/protected');
     expect(res.status).toBe(200);

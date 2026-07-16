@@ -6,7 +6,7 @@ import type { ProductResponse, CreateProductInput } from './product.contracts.js
 export class ProductRepository {
   constructor(
     @Inject(DATABASE_CLIENT)
-    private readonly db: Database
+    private readonly db: Database,
   ) {}
 
   async create(input: CreateProductInput): Promise<ProductResponse> {

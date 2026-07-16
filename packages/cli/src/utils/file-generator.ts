@@ -33,14 +33,14 @@ export async function detectDatabaseFromAppModule(): Promise<'postgres' | 'mongo
 export async function generateFiles(
   targetDir: string,
   files: { path: string; content: string }[],
-  options: { force?: boolean } = {}
+  options: { force?: boolean } = {},
 ): Promise<void> {
   if (!options.force) {
     for (const file of files) {
       const filePath = join(targetDir, file.path);
       if (await fileExists(filePath)) {
-        const relativePart = targetDir.includes('/src/') 
-          ? targetDir.split('/src/').pop() 
+        const relativePart = targetDir.includes('/src/')
+          ? targetDir.split('/src/').pop()
           : targetDir.split('/').pop();
         throw new Error(`File already exists: src/${relativePart}/${file.path}.`);
       }
@@ -56,8 +56,8 @@ export async function generateFiles(
       await mkdir(fileDir, { recursive: true });
     }
     await writeFile(filePath, file.content, 'utf-8');
-    const relativePart = targetDir.includes('/src/') 
-      ? targetDir.split('/src/').pop() 
+    const relativePart = targetDir.includes('/src/')
+      ? targetDir.split('/src/').pop()
       : targetDir.split('/').pop();
     console.log(pc.green(`  CREATED  src/${relativePart}/${file.path}`));
   }

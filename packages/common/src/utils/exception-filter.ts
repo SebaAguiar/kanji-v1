@@ -12,6 +12,8 @@ export function Catch(...exceptions: Array<new (...args: any[]) => Error>): Clas
   };
 }
 
-export function getExceptionFilterTargets(target: object): Array<new (...args: any[]) => Error> | undefined {
+export function getExceptionFilterTargets(
+  target: object,
+): Array<new (...args: any[]) => Error> | undefined {
   return Reflect.getMetadata(CATCH_DECORATOR_KEY, target);
 }

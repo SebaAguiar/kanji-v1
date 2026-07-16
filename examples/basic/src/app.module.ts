@@ -11,7 +11,8 @@ import { ProductModule } from './products/product.module.js';
   imports: [
     StoreModule.forRoot({
       type: 'postgres',
-      connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/kanji_test',
+      connectionString:
+        process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/kanji_test',
       schema: usersSchema,
     }),
     AuthModule.forRoot({

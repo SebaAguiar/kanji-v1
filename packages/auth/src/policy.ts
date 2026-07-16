@@ -33,7 +33,10 @@ export interface AclOptions {
   policy: Token<ResourcePolicy>;
   action: 'create' | 'read' | 'update' | 'delete';
   resourceId?: (c: import('hono').Context) => string;
-  resourceResolver: (c: import('hono').Context, id: string) => Promise<Record<string, unknown> | null>;
+  resourceResolver: (
+    c: import('hono').Context,
+    id: string,
+  ) => Promise<Record<string, unknown> | null>;
   hideExistence?: boolean;
   contextModule: Constructor<object>;
 }

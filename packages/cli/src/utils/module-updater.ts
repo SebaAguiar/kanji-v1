@@ -6,7 +6,11 @@ export function ensurePropertyInDecorator(content: string, propertyName: string)
   return content;
 }
 
-export function updateAppModule(fileContent: string, moduleName: string, importPath: string): string {
+export function updateAppModule(
+  fileContent: string,
+  moduleName: string,
+  importPath: string,
+): string {
   if (fileContent.includes(moduleName)) {
     return fileContent;
   }
@@ -17,7 +21,10 @@ export function updateAppModule(fileContent: string, moduleName: string, importP
   if (lastImportIndex !== -1) {
     const nextNewLine = fileContent.indexOf('\n', lastImportIndex);
     if (nextNewLine !== -1) {
-      updatedContent = fileContent.slice(0, nextNewLine + 1) + importStatement + fileContent.slice(nextNewLine + 1);
+      updatedContent =
+        fileContent.slice(0, nextNewLine + 1) +
+        importStatement +
+        fileContent.slice(nextNewLine + 1);
     } else {
       updatedContent = importStatement + fileContent;
     }
@@ -64,16 +71,16 @@ export function updateAppModule(fileContent: string, moduleName: string, importP
     const lastLineBeforeImports = beforeImports.split('\n').pop() || '';
     const closeIndentMatch = lastLineBeforeImports.match(/^(\s*)/);
     const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
-    
+
     newInner = `\n${closeIndent}  ${moduleName},\n${closeIndent}`;
   } else {
     const isMultiline = innerContent.includes('\n');
     if (isMultiline) {
-      const lines = innerContent.split('\n').filter(line => line.trim().length > 0);
+      const lines = innerContent.split('\n').filter((line) => line.trim().length > 0);
       const lastLine = lines[lines.length - 1];
       const indentationMatch = lastLine.match(/^(\s*)/);
       const indent = indentationMatch ? indentationMatch[1] : '    ';
-      
+
       const beforeImports = updatedContent.slice(0, importsIndex);
       const lastLineBeforeImports = beforeImports.split('\n').pop() || '';
       const closeIndentMatch = lastLineBeforeImports.match(/^(\s*)/);
@@ -89,7 +96,10 @@ export function updateAppModule(fileContent: string, moduleName: string, importP
     }
   }
 
-  updatedContent = updatedContent.slice(0, openBracketIndex + 1) + newInner + updatedContent.slice(closeBracketIndex);
+  updatedContent =
+    updatedContent.slice(0, openBracketIndex + 1) +
+    newInner +
+    updatedContent.slice(closeBracketIndex);
   return updatedContent;
 }
 
@@ -97,7 +107,7 @@ export function updateLocalModule(
   fileContent: string,
   className: string,
   importPath: string,
-  arrayName: 'controllers' | 'providers' | 'exports'
+  arrayName: 'controllers' | 'providers' | 'exports',
 ): string {
   let updatedContent = fileContent;
   const importStatement = `import { ${className} } from '${importPath}';\n`;
@@ -106,7 +116,10 @@ export function updateLocalModule(
     if (lastImportIndex !== -1) {
       const nextNewLine = fileContent.indexOf('\n', lastImportIndex);
       if (nextNewLine !== -1) {
-        updatedContent = fileContent.slice(0, nextNewLine + 1) + importStatement + fileContent.slice(nextNewLine + 1);
+        updatedContent =
+          fileContent.slice(0, nextNewLine + 1) +
+          importStatement +
+          fileContent.slice(nextNewLine + 1);
       } else {
         updatedContent = importStatement + fileContent;
       }
@@ -146,7 +159,7 @@ export function updateLocalModule(
   }
 
   const innerContent = updatedContent.slice(openBracketIndex + 1, closeBracketIndex);
-  
+
   const elementRegex = new RegExp(`\\b${className}\\b`);
   if (elementRegex.test(innerContent)) {
     return updatedContent;
@@ -160,16 +173,16 @@ export function updateLocalModule(
     const lastLineBeforeProperty = beforeProperty.split('\n').pop() || '';
     const closeIndentMatch = lastLineBeforeProperty.match(/^(\s*)/);
     const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
-    
+
     newInner = `\n${closeIndent}  ${className},\n${closeIndent}`;
   } else {
     const isMultiline = innerContent.includes('\n');
     if (isMultiline) {
-      const lines = innerContent.split('\n').filter(line => line.trim().length > 0);
+      const lines = innerContent.split('\n').filter((line) => line.trim().length > 0);
       const lastLine = lines[lines.length - 1];
       const indentationMatch = lastLine.match(/^(\s*)/);
       const indent = indentationMatch ? indentationMatch[1] : '    ';
-      
+
       const beforeProperty = updatedContent.slice(0, propertyIndex);
       const lastLineBeforeProperty = beforeProperty.split('\n').pop() || '';
       const closeIndentMatch = lastLineBeforeProperty.match(/^(\s*)/);
@@ -185,6 +198,9 @@ export function updateLocalModule(
     }
   }
 
-  updatedContent = updatedContent.slice(0, openBracketIndex + 1) + newInner + updatedContent.slice(closeBracketIndex);
+  updatedContent =
+    updatedContent.slice(0, openBracketIndex + 1) +
+    newInner +
+    updatedContent.slice(closeBracketIndex);
   return updatedContent;
 }

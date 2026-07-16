@@ -8,7 +8,7 @@ import type { Context } from 'hono';
 export class AuthController {
   constructor(
     @Inject(SESSION_PROVIDER)
-    private readonly session: SessionProvider
+    private readonly session: SessionProvider,
   ) {}
 
   @Post('/login')
@@ -27,7 +27,7 @@ export class AuthController {
         roles: ['user'],
         scopes: ['read', 'write'],
       },
-      3600
+      3600,
     );
 
     return c.json({ token }, 200);

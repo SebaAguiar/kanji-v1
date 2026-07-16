@@ -33,7 +33,7 @@ export async function exchangeCodeForToken(
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
     body: new URLSearchParams({
       client_id: provider.clientId,
@@ -76,9 +76,7 @@ export async function getUserProfile(
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(
-      `Failed to fetch user profile: ${response.statusText}. Details: ${errorBody}`,
-    );
+    throw new Error(`Failed to fetch user profile: ${response.statusText}. Details: ${errorBody}`);
   }
 
   const data = (await response.json()) as {
@@ -128,11 +126,12 @@ export async function getUserProfile(
   } else {
     id = String(data.id ?? data.sub ?? data.objectId ?? '');
     email = String(data.email ?? data.mail ?? data.userPrincipalName ?? '');
-    name = data.name !== undefined
-      ? String(data.name)
-      : data.displayName !== undefined
-        ? String(data.displayName)
-        : undefined;
+    name =
+      data.name !== undefined
+        ? String(data.name)
+        : data.displayName !== undefined
+          ? String(data.displayName)
+          : undefined;
   }
 
   if (!id) {

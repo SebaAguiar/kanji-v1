@@ -18,7 +18,8 @@ export function parseZodSchema(schema: z.ZodTypeAny): OpenApiSchema {
           if (check.kind === 'email') parsed.format = 'email';
           else if (check.kind === 'uuid') parsed.format = 'uuid';
           else if (check.kind === 'url') parsed.format = 'uri';
-          else if (check.kind === 'min') parsed.minItems = check.value; // Zod uses checks for minLength but we map it cleanly
+          else if (check.kind === 'min')
+            parsed.minItems = check.value; // Zod uses checks for minLength but we map it cleanly
           else if (check.kind === 'max') parsed.maxItems = check.value;
           else if (check.kind === 'regex') parsed.pattern = check.regex.source;
           else if (check.kind === 'startsWith') parsed.pattern = `^${escapeRegex(check.value)}`;
@@ -50,7 +51,8 @@ export function parseZodSchema(schema: z.ZodTypeAny): OpenApiSchema {
     }
     case 'ZodLiteral': {
       const val = def.value;
-      const t = typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string';
+      const t =
+        typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string';
       parsed = { type: t, enum: [String(val)] };
       break;
     }

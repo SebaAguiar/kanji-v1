@@ -49,15 +49,21 @@ class MockQueryBuilder implements QueryBuilder<Record<string, DatabaseValue>> {
     return this.data.find((item) => item.id === id || (item as any).id === id) ?? null;
   }
 
-  async findBy(criteria: Record<string, DatabaseValue>): Promise<Record<string, DatabaseValue> | null> {
-    return this.data.find((item) =>
-      Object.entries(criteria).every(([key, val]) => item[key] === val)
-    ) ?? null;
+  async findBy(
+    criteria: Record<string, DatabaseValue>,
+  ): Promise<Record<string, DatabaseValue> | null> {
+    return (
+      this.data.find((item) => Object.entries(criteria).every(([key, val]) => item[key] === val)) ??
+      null
+    );
   }
 
   then<TResult1 = Record<string, DatabaseValue>[], TResult2 = never>(
-    onfulfilled?: ((value: Record<string, DatabaseValue>[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
+    onfulfilled?:
+      | ((value: Record<string, DatabaseValue>[]) => TResult1 | PromiseLike<TResult1>)
+      | undefined
+      | null,
+    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null,
   ): Promise<TResult1 | TResult2> {
     const result = Promise.resolve(this.data);
     if (onfulfilled) {
@@ -89,7 +95,10 @@ export function createMockDatabase(): Database {
     transaction: async <T>(fn: (trx: Database) => Promise<T>): Promise<T> => {
       return fn(createMockDatabase());
     },
-    raw: async (_query: string, _params?: DatabaseValue[]): Promise<Record<string, DatabaseValue>[]> => {
+    raw: async (
+      _query: string,
+      _params?: DatabaseValue[],
+    ): Promise<Record<string, DatabaseValue>[]> => {
       return [];
     },
     disconnect: async (): Promise<void> => {

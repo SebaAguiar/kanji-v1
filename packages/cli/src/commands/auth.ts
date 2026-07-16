@@ -19,13 +19,20 @@ export function registerAuthCommand(program: Command) {
       const srcDir = join(process.cwd(), 'src');
 
       if (!(await fileExists(srcDir))) {
-        console.error(pc.red('Error: "src/" folder not found. Run this command at the root of a Kanji application.'));
+        console.error(
+          pc.red(
+            'Error: "src/" folder not found. Run this command at the root of a Kanji application.',
+          ),
+        );
         process.exit(1);
       }
 
       const dirEntries = await readdir(srcDir, { withFileTypes: true });
       const resources: string[] = dirEntries
-        .filter((entry) => entry.isDirectory() && !['auth', 'db', '__tests__', 'common'].includes(entry.name))
+        .filter(
+          (entry) =>
+            entry.isDirectory() && !['auth', 'db', '__tests__', 'common'].includes(entry.name),
+        )
         .map((entry) => entry.name);
 
       if (resources.length === 0) {
@@ -65,7 +72,10 @@ export function registerAuthCommand(program: Command) {
         });
 
         const securedActions: string[] = actionsPrompt.value || [];
-        const actionRules: Record<string, { model: 'role-based' | 'owner-based'; roles?: string[] }> = {};
+        const actionRules: Record<
+          string,
+          { model: 'role-based' | 'owner-based'; roles?: string[] }
+        > = {};
 
         for (const action of securedActions) {
           const modelPrompt = await prompts({
@@ -100,7 +110,9 @@ export function registerAuthCommand(program: Command) {
         const policyPath = join(targetDir, policyFileName);
 
         if (options.dryRun) {
-          console.log(pc.yellow(`[Dry Run] Would create policy file: src/${res}/${policyFileName}`));
+          console.log(
+            pc.yellow(`[Dry Run] Would create policy file: src/${res}/${policyFileName}`),
+          );
           continue;
         }
 
@@ -122,7 +134,9 @@ export function registerAuthCommand(program: Command) {
             }
           } catch (err) {
             console.warn(
-              pc.yellow(`Warning: Could not register policy in module: ${err instanceof Error ? err.message : String(err)}`)
+              pc.yellow(
+                `Warning: Could not register policy in module: ${err instanceof Error ? err.message : String(err)}`,
+              ),
             );
           }
         }

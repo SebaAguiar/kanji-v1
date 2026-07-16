@@ -9,7 +9,7 @@ import { UserContracts, CreateUserInput } from './users.contracts.js';
 @ContractOf(UserContracts)
 @Controller('/users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Post('/')
   @Contract(UserContracts.create)

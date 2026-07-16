@@ -4,9 +4,15 @@ export function createParamDecorator(factory: (ctx: unknown) => unknown): Parame
   return (target: object, propertyKey: string | symbol | undefined, parameterIndex: number) => {
     if (propertyKey === undefined) return;
 
-    const existingMetadata = Reflect.getMetadata('kanji:params', target, propertyKey as string | symbol) ?? [];
+    const existingMetadata =
+      Reflect.getMetadata('kanji:params', target, propertyKey as string | symbol) ?? [];
     existingMetadata.push({ index: parameterIndex, factory });
-    Reflect.defineMetadata('kanji:params', existingMetadata, target, propertyKey as string | symbol);
+    Reflect.defineMetadata(
+      'kanji:params',
+      existingMetadata,
+      target,
+      propertyKey as string | symbol,
+    );
   };
 }
 

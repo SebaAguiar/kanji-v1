@@ -8,8 +8,10 @@
     "build": "bun run build:all",
     "build:all": "cd packages/common && tsc && cd ../core && tsc && cd ../contracts && tsc && cd ../platform-hono && tsc && cd ../store && tsc && cd ../auth && tsc && cd ../openapi && tsc && cd ../cli && tsc && cd ../testing && tsc",
     "test": "bun test",
+    "test:ci": "bun test",
     "lint": "eslint \"packages/**/src/**/*.ts\" \"examples/**/src/**/*.ts\"",
-    "format": "prettier --write \"packages/**/*.ts\" \"examples/**/*.ts\""
+    "format": "prettier --write \"packages/**/*.ts\" \"examples/**/*.ts\"",
+    "format:check": "prettier --check \"packages/**/*.ts\" \"examples/**/*.ts\""
   },
   "keywords": [
     "hono",

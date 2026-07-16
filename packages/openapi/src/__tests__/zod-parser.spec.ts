@@ -15,22 +15,47 @@ describe('Zod Parser', () => {
     expect(parseZodSchema(z.string().email())).toEqual({ type: 'string', format: 'email' });
     expect(parseZodSchema(z.string().uuid())).toEqual({ type: 'string', format: 'uuid' });
     expect(parseZodSchema(z.string().url())).toEqual({ type: 'string', format: 'uri' });
-    expect(parseZodSchema(z.string().regex(/^[a-z]+$/))).toEqual({ type: 'string', pattern: '^[a-z]+$' });
-    expect(parseZodSchema(z.string().startsWith('abc'))).toEqual({ type: 'string', pattern: '^abc' });
+    expect(parseZodSchema(z.string().regex(/^[a-z]+$/))).toEqual({
+      type: 'string',
+      pattern: '^[a-z]+$',
+    });
+    expect(parseZodSchema(z.string().startsWith('abc'))).toEqual({
+      type: 'string',
+      pattern: '^abc',
+    });
     expect(parseZodSchema(z.string().endsWith('xyz'))).toEqual({ type: 'string', pattern: 'xyz$' });
-    expect(parseZodSchema(z.string().includes('hello'))).toEqual({ type: 'string', pattern: 'hello' });
+    expect(parseZodSchema(z.string().includes('hello'))).toEqual({
+      type: 'string',
+      pattern: 'hello',
+    });
   });
 
   it('should parse literal and enum types', () => {
     expect(parseZodSchema(z.literal('test'))).toEqual({ type: 'string', enum: ['test'] });
     expect(parseZodSchema(z.literal(123))).toEqual({ type: 'number', enum: ['123'] });
-    expect(parseZodSchema(z.enum(['A', 'B', 'C']))).toEqual({ type: 'string', enum: ['A', 'B', 'C'] });
-    
-    enum NumericEnum { X, Y, Z }
-    expect(parseZodSchema(z.nativeEnum(NumericEnum))).toEqual({ type: 'number', enum: ['0', '1', '2'] });
+    expect(parseZodSchema(z.enum(['A', 'B', 'C']))).toEqual({
+      type: 'string',
+      enum: ['A', 'B', 'C'],
+    });
 
-    enum StringEnum { Foo = 'foo', Bar = 'bar' }
-    expect(parseZodSchema(z.nativeEnum(StringEnum))).toEqual({ type: 'string', enum: ['foo', 'bar'] });
+    enum NumericEnum {
+      X,
+      Y,
+      Z,
+    }
+    expect(parseZodSchema(z.nativeEnum(NumericEnum))).toEqual({
+      type: 'number',
+      enum: ['0', '1', '2'],
+    });
+
+    enum StringEnum {
+      Foo = 'foo',
+      Bar = 'bar',
+    }
+    expect(parseZodSchema(z.nativeEnum(StringEnum))).toEqual({
+      type: 'string',
+      enum: ['foo', 'bar'],
+    });
   });
 
   it('should parse object shapes and requirements', () => {
@@ -73,7 +98,9 @@ describe('Zod Parser', () => {
       anyOf: [{ type: 'string' }, { type: 'number' }],
     });
 
-    expect(parseZodSchema(z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() })))).toEqual({
+    expect(
+      parseZodSchema(z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() }))),
+    ).toEqual({
       allOf: [
         { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] },
         { type: 'object', properties: { b: { type: 'number' } }, required: ['b'] },

@@ -6,4 +6,3 @@ export * from './decorators.js';
 export * from './openapi.controller.js';
 export * from './openapi.module.js';
 export * from './swagger-ui.js';
-

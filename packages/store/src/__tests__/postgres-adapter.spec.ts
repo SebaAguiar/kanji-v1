@@ -10,7 +10,7 @@ const testUsersTable = pgTable('test_users', {
 describe('PostgresDatabase Adapter (Integration)', () => {
   const connectionString =
     process.env.TEST_DATABASE_URL || 'postgres://postgres:postgres@localhost:5433/kanji_core_test';
-  
+
   const db = new PostgresDatabase(connectionString, {
     testUsers: testUsersTable,
   });

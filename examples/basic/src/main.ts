@@ -23,11 +23,15 @@ async function bootstrap() {
   const { OpenApiGenerator, SdkGenerator } = await import('@kanjijs/openapi');
   const generator = new OpenApiGenerator(openapiConfig);
   const spec = generator.generateSpec();
-  
+
   const fs = await import('fs/promises');
   const path = await import('path');
-  
-  await fs.writeFile(path.join(import.meta.dirname, 'openapi.json'), JSON.stringify(spec, null, 2), 'utf-8');
+
+  await fs.writeFile(
+    path.join(import.meta.dirname, 'openapi.json'),
+    JSON.stringify(spec, null, 2),
+    'utf-8',
+  );
   console.log('✅ OpenAPI Spec generated in src/openapi.json');
 
   const sdkGenerator = new SdkGenerator();
@@ -35,7 +39,7 @@ async function bootstrap() {
   console.log('✅ Client SDK generated in src/sdk.ts');
 
   console.log(`\n🚀 Kanji Example App is running on http://localhost:${port}`);
-  
+
   // Start Bun native HTTP server
   Bun.serve({
     fetch: app.fetch,

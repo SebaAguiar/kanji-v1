@@ -11,7 +11,7 @@ interface HttpRouteMeta {
 export class ContractValidator {
   public static validate(
     controller: Function,
-    declaredContract: Record<string, KanjiContract> | null
+    declaredContract: Record<string, KanjiContract> | null,
   ): ValidationResult[] {
     const results: ValidationResult[] = [];
     const implementedMethods = getRegisteredContractActions(controller);
@@ -26,17 +26,17 @@ export class ContractValidator {
       const contract: KanjiContract | undefined = Reflect.getMetadata(
         'kanji:contract',
         controller.prototype,
-        methodName
+        methodName,
       );
       const httpMeta: HttpRouteMeta | undefined = Reflect.getMetadata(
         'kanji:http:method',
         controller.prototype,
-        methodName
+        methodName,
       );
       const file: string | undefined = Reflect.getMetadata(
         'kanji:location',
         controller.prototype,
-        methodName
+        methodName,
       );
 
       // Error 1: @Contract declared but no HTTP method decorator
@@ -81,12 +81,12 @@ export class ContractValidator {
       const httpMeta: HttpRouteMeta | undefined = Reflect.getMetadata(
         'kanji:http:method',
         controller.prototype,
-        methodName
+        methodName,
       );
       const file: string | undefined = Reflect.getMetadata(
         'kanji:location',
         controller.prototype,
-        methodName
+        methodName,
       );
 
       // Warning 1: Implemented route but missing contract schema
@@ -109,11 +109,12 @@ export class ContractValidator {
         severity: ValidationSeverity.WARN,
         message: `${controller.name} declares @ContractOf but is missing implementations for: ${missing.join(', ')}`,
         location: { controller: controller.name },
-        suggestion: `Implement these methods or remove them from the contract. Example template:\n` +
+        suggestion:
+          `Implement these methods or remove them from the contract. Example template:\n` +
           missing
             .map(
               (m) =>
-                `  @${declaredContract[m].method}('${declaredContract[m].path}') @Contract(Contracts.${m}) async ${m}(c: Context) { }`
+                `  @${declaredContract[m].method}('${declaredContract[m].path}') @Contract(Contracts.${m}) async ${m}(c: Context) { }`,
             )
             .join('\n'),
       });
@@ -121,13 +122,15 @@ export class ContractValidator {
 
     // Warning 3: Implemented in controller but not part of declared contract
     const extra = Array.from(implementedMethods).filter(
-      (m) => Reflect.getMetadata('kanji:contract', controller.prototype, m) && !declaredMethods.includes(m)
+      (m) =>
+        Reflect.getMetadata('kanji:contract', controller.prototype, m) &&
+        !declaredMethods.includes(m),
     );
     for (const methodName of extra) {
       const file: string | undefined = Reflect.getMetadata(
         'kanji:location',
         controller.prototype,
-        methodName
+        methodName,
       );
       results.push({
         severity: ValidationSeverity.WARN,

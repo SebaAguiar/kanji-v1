@@ -12,7 +12,9 @@ describe('DI Container', () => {
 
     @Injectable()
     class DummyService {
-      getValue() { return 'dummy'; }
+      getValue() {
+        return 'dummy';
+      }
     }
 
     @KanjijsModule({
@@ -81,16 +83,11 @@ describe('DI Container', () => {
 
     @Injectable()
     class ClientService {
-      constructor(
-        @Inject(API_KEY) public readonly apiKey: string
-      ) {}
+      constructor(@Inject(API_KEY) public readonly apiKey: string) {}
     }
 
     @KanjijsModule({
-      providers: [
-        { provide: API_KEY, useValue: 'secret-key-123' },
-        ClientService,
-      ],
+      providers: [{ provide: API_KEY, useValue: 'secret-key-123' }, ClientService],
     })
     class ClientModule {}
 
@@ -182,9 +179,7 @@ describe('DI Container', () => {
     const SHARED_VAL = Symbol('SHARED_VAL');
 
     @KanjijsModule({
-      providers: [
-        { provide: SHARED_VAL, useValue: 'shared-data-globally' }
-      ],
+      providers: [{ provide: SHARED_VAL, useValue: 'shared-data-globally' }],
       exports: [SHARED_VAL],
       global: true,
     })

@@ -21,7 +21,9 @@ export function getRequestId(c: Context): string {
   return c.get(KANJI_CTX.REQUEST_ID as string);
 }
 
-export function getAuthUser<T = { id: string; email: string; name: string; roles: string[] }>(c: Context): T | undefined {
+export function getAuthUser<T = { id: string; email: string; name: string; roles: string[] }>(
+  c: Context,
+): T | undefined {
   return c.get(KANJI_CTX.AUTH_USER as string) as T | undefined;
 }
 

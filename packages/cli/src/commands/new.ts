@@ -27,12 +27,24 @@ export function registerNewCommand(program: Command) {
         const appModuleTs = getAppModuleTemplate();
         const appControllerTs = getAppControllerTemplate();
 
-        await writeFile(join(targetDir, 'package.json'), JSON.stringify(packageJson, null, 2), 'utf-8');
-        await writeFile(join(targetDir, 'tsconfig.json'), JSON.stringify(tsconfigJson, null, 2), 'utf-8');
+        await writeFile(
+          join(targetDir, 'package.json'),
+          JSON.stringify(packageJson, null, 2),
+          'utf-8',
+        );
+        await writeFile(
+          join(targetDir, 'tsconfig.json'),
+          JSON.stringify(tsconfigJson, null, 2),
+          'utf-8',
+        );
         await writeFile(join(targetDir, 'src', 'main.ts'), mainTs, 'utf-8');
         await writeFile(join(targetDir, 'src', 'app.module.ts'), appModuleTs, 'utf-8');
         await writeFile(join(targetDir, 'src', 'app.controller.ts'), appControllerTs, 'utf-8');
-        await writeFile(join(targetDir, '.env.example'), 'PORT=3000\nJWT_SECRET=super-secret-key-change-me\n', 'utf-8');
+        await writeFile(
+          join(targetDir, '.env.example'),
+          'PORT=3000\nJWT_SECRET=super-secret-key-change-me\n',
+          'utf-8',
+        );
 
         console.log(pc.bold(pc.green(`\nKanji project "${appName}" successfully created! 🚀`)));
         console.log(pc.yellow(`Next steps:\n  cd ${appName}\n  bun install\n  bun dev`));

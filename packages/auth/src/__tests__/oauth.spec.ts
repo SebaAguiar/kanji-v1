@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'bun:test';
-import { generateRandomState, getAuthorizationUrl, exchangeCodeForToken, getUserProfile } from '../oauth.js';
+import {
+  generateRandomState,
+  getAuthorizationUrl,
+  exchangeCodeForToken,
+  getUserProfile,
+} from '../oauth.js';
 import type { OAuthProviderConfig } from '../types.js';
 
 const mockGoogleProvider: OAuthProviderConfig = {
@@ -29,7 +34,11 @@ describe('generateRandomState', () => {
 
 describe('getAuthorizationUrl', () => {
   it('should build correct URL with provider params and state', () => {
-    const url = getAuthorizationUrl(mockGoogleProvider, 'http://localhost:3000/callback', 'test-state');
+    const url = getAuthorizationUrl(
+      mockGoogleProvider,
+      'http://localhost:3000/callback',
+      'test-state',
+    );
     const parsed = new URL(url);
 
     expect(parsed.origin + parsed.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');

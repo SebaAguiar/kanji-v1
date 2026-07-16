@@ -20,14 +20,12 @@ export class DefaultConsoleLogger implements KanjiLogger {
       return message;
     }
     // Formats Router latency message "METHOD /path - STATUS - +DURATIONms" with color codes
-    return message.replace(
-      / - (\d+) - \+(.+ms)/,
-      (_match, status, duration) => {
-        const statusCode = parseInt(status, 10);
-        const statusColor = statusCode >= 500 ? '\x1b[31m' : statusCode >= 400 ? '\x1b[33m' : '\x1b[32m';
-        return ` - ${statusColor}${status}\x1b[0m - \x1b[36m+${duration}\x1b[0m`;
-      }
-    );
+    return message.replace(/ - (\d+) - \+(.+ms)/, (_match, status, duration) => {
+      const statusCode = parseInt(status, 10);
+      const statusColor =
+        statusCode >= 500 ? '\x1b[31m' : statusCode >= 400 ? '\x1b[33m' : '\x1b[32m';
+      return ` - ${statusColor}${status}\x1b[0m - \x1b[36m+${duration}\x1b[0m`;
+    });
   }
 
   log(message: string, context?: string): void {

@@ -41,7 +41,8 @@ export interface GetUsersResponse {
   /** @format date-time */
   /** Timestamp when the user was created */
   createdAt?: string;
-}[]
+}
+[];
 
 export interface PostProductsBody {
   name: string;
@@ -55,7 +56,8 @@ export interface PostProductsResponse {
 export interface GetProductsResponse {
   id: string;
   name: string;
-}[]
+}
+[];
 
 export interface GetProductsByIdResponse {
   id: string;
@@ -91,7 +93,7 @@ export class APIClient {
       body?: unknown;
       query?: Record<string, unknown>;
       headers?: Record<string, string>;
-    } = {}
+    } = {},
   ): Promise<T> {
     const url = new URL(this.baseUrl + path);
     if (options.query) {
@@ -126,40 +128,46 @@ export class APIClient {
     return response.json() as Promise<T>;
   }
 
-  async getAuthSigninByProvider(provider: string, options?: { headers?: Record<string, string> }): Promise<null> {
+  async getAuthSigninByProvider(
+    provider: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<null> {
     return this.request<null>('GET', `/auth/signin/${provider}`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async getAuthCallback(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('GET', `/auth/callback`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async getAuthMe(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('GET', `/auth/me`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async getApiOpenapi(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('GET', `/api/openapi.json`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async getApiDocs(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('GET', `/api/docs`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
-  async postUsers(body: PostUsersBody, options?: { headers?: Record<string, string> }): Promise<PostUsersResponse> {
+  async postUsers(
+    body: PostUsersBody,
+    options?: { headers?: Record<string, string> },
+  ): Promise<PostUsersResponse> {
     return this.request<PostUsersResponse>('POST', `/users`, {
       body,
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
@@ -168,57 +176,70 @@ export class APIClient {
    */
   async getUsers(options?: { headers?: Record<string, string> }): Promise<GetUsersResponse> {
     return this.request<GetUsersResponse>('GET', `/users`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async getUsersMe(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('GET', `/users/me`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async postAuthLogin(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('POST', `/auth/login`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async postAuthRefresh(options?: { headers?: Record<string, string> }): Promise<null> {
     return this.request<null>('POST', `/auth/refresh`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
-  async postProducts(body: PostProductsBody, options?: { headers?: Record<string, string> }): Promise<PostProductsResponse> {
+  async postProducts(
+    body: PostProductsBody,
+    options?: { headers?: Record<string, string> },
+  ): Promise<PostProductsResponse> {
     return this.request<PostProductsResponse>('POST', `/products`, {
       body,
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
   async getProducts(options?: { headers?: Record<string, string> }): Promise<GetProductsResponse> {
     return this.request<GetProductsResponse>('GET', `/products`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
-  async getProductsById(id: string, options?: { headers?: Record<string, string> }): Promise<GetProductsByIdResponse> {
+  async getProductsById(
+    id: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<GetProductsByIdResponse> {
     return this.request<GetProductsByIdResponse>('GET', `/products/${id}`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
-  async patchProductsById(id: string, body: PatchProductsByIdBody, options?: { headers?: Record<string, string> }): Promise<PatchProductsByIdResponse> {
+  async patchProductsById(
+    id: string,
+    body: PatchProductsByIdBody,
+    options?: { headers?: Record<string, string> },
+  ): Promise<PatchProductsByIdResponse> {
     return this.request<PatchProductsByIdResponse>('PATCH', `/products/${id}`, {
       body,
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 
-  async deleteProductsById(id: string, options?: { headers?: Record<string, string> }): Promise<DeleteProductsByIdResponse> {
+  async deleteProductsById(
+    id: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<DeleteProductsByIdResponse> {
     return this.request<DeleteProductsByIdResponse>('DELETE', `/products/${id}`, {
-      headers: options?.headers
+      headers: options?.headers,
     });
   }
 }

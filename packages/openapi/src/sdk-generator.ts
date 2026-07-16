@@ -1,4 +1,9 @@
-import type { OpenApiDocument, OpenApiSchema, OpenApiOperation, OpenApiParameter } from './types.js';
+import type {
+  OpenApiDocument,
+  OpenApiSchema,
+  OpenApiOperation,
+  OpenApiParameter,
+} from './types.js';
 import { writeFile } from 'fs/promises';
 
 export class SdkGenerator {
@@ -9,7 +14,7 @@ export class SdkGenerator {
     // Helper: Mapear OpenApiSchema a tipo TS
     const schemaToTs = (schema?: OpenApiSchema): string => {
       if (!schema) return 'unknown';
-      
+
       if (schema.allOf) {
         return schema.allOf.map((s) => schemaToTs(s)).join(' & ');
       }
@@ -56,15 +61,21 @@ export class SdkGenerator {
               }
               return `${jsdoc.join('')}  ${key}${isRequired ? '' : '?'}: ${schemaToTs(prop)};`;
             });
-            
+
             let propStr = `{\n${props.join('\n')}\n}`;
             if (schema.additionalProperties) {
-              const addPropsType = schema.additionalProperties === true ? 'unknown' : schemaToTs(schema.additionalProperties);
+              const addPropsType =
+                schema.additionalProperties === true
+                  ? 'unknown'
+                  : schemaToTs(schema.additionalProperties);
               propStr = `(${propStr} & Record<string, ${addPropsType}>)`;
             }
             typeStr = propStr;
           } else if (schema.additionalProperties) {
-            const addPropsType = schema.additionalProperties === true ? 'unknown' : schemaToTs(schema.additionalProperties);
+            const addPropsType =
+              schema.additionalProperties === true
+                ? 'unknown'
+                : schemaToTs(schema.additionalProperties);
             typeStr = `Record<string, ${addPropsType}>`;
           } else {
             typeStr = 'Record<string, unknown>';
@@ -171,17 +182,23 @@ export class SdkGenerator {
         const methodLines: string[] = [];
         if (op.deprecated) {
           methodLines.push('  /**');
-          methodLines.push('   * @deprecated This endpoint is deprecated and may be removed in future versions.');
+          methodLines.push(
+            '   * @deprecated This endpoint is deprecated and may be removed in future versions.',
+          );
           methodLines.push('   */');
         }
-        methodLines.push(`  async ${opName}(${methodArgs.join(', ')}): Promise<${successResponseInterface}> {`);
-        
+        methodLines.push(
+          `  async ${opName}(${methodArgs.join(', ')}): Promise<${successResponseInterface}> {`,
+        );
+
         const reqOpts: string[] = [];
         if (bodyType !== 'undefined') reqOpts.push('body');
         if (queryType !== 'undefined') reqOpts.push('query');
         reqOpts.push('headers: options?.headers');
 
-        methodLines.push(`    return this.request<${successResponseInterface}>('${method.toUpperCase()}', \`${jsPath}\`, {`);
+        methodLines.push(
+          `    return this.request<${successResponseInterface}>('${method.toUpperCase()}', \`${jsPath}\`, {`,
+        );
         if (reqOpts.length > 0) {
           methodLines.push(`      ${reqOpts.join(',\n      ')}`);
         }

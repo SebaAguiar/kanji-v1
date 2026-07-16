@@ -69,7 +69,9 @@ describe('Global Exception Filter (app.onError)', () => {
       return c.json({ error: 'INTERNAL_SERVER_ERROR', message: 'Unexpected', issues: [] }, 500);
     });
     app.get('/test', () => {
-      throw new ValidationError([{ path: 'email', code: 'invalid_format', message: 'Invalid email' }]);
+      throw new ValidationError([
+        { path: 'email', code: 'invalid_format', message: 'Invalid email' },
+      ]);
     });
 
     const res = await app.request('/test');
@@ -86,7 +88,10 @@ describe('Global Exception Filter (app.onError)', () => {
       if (err instanceof KanjiError) {
         return c.json({ error: err.code, message: err.message, issues: [] }, err.statusCode as 400);
       }
-      return c.json({ error: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred', issues: [] }, 500);
+      return c.json(
+        { error: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred', issues: [] },
+        500,
+      );
     });
     app.get('/test', () => {
       throw new Error('something broke');

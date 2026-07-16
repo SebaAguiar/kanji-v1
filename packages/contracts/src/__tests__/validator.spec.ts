@@ -27,7 +27,7 @@ describe('ZodValidator Middleware', () => {
       (c) => {
         validatedBody = c.get('kanji.validated.body' as any);
         return c.text('OK');
-      }
+      },
     );
 
     const response = await app.request('/test', {
@@ -57,7 +57,7 @@ describe('ZodValidator Middleware', () => {
           body: schema,
         },
       }),
-      (c) => c.text('OK')
+      (c) => c.text('OK'),
     );
 
     const response = await app.request('/test', {
@@ -96,7 +96,7 @@ describe('ZodValidator Middleware', () => {
       (c) => {
         validatedQueryAs = c.get('kanji.validated.query' as any);
         return c.text('OK');
-      }
+      },
     );
 
     const response = await app.request('/test?limit=25');

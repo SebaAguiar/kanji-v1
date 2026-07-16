@@ -19,7 +19,7 @@ export interface QueryBuilder<T = Record<string, DatabaseValue>> {
   // PromiseLike signature: resolves to an array of entity type T
   then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
+    onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null,
   ): Promise<TResult1 | TResult2>;
 }
 
@@ -28,13 +28,13 @@ export interface Database {
   query: {
     [table: string]: QueryBuilder<Record<string, DatabaseValue>>;
   };
-  
+
   // Unified transaction support
   transaction<T>(fn: (trx: Database) => Promise<T>): Promise<T>;
-  
+
   // Safe raw queries
   raw(query: string, params?: DatabaseValue[]): Promise<Record<string, DatabaseValue>[]>;
-  
+
   // Close connection
   disconnect(): Promise<void>;
 }

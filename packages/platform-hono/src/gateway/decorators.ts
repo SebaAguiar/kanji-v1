@@ -9,19 +9,19 @@ export function WebSocketGateway(path: string = '/ws'): ClassDecorator {
 
 export function WebSocketMessage(event: string): MethodDecorator {
   return (target: object, propertyKey: string | symbol) => {
-    WsMetadataStorage.getInstance().registerMessageHandler(
-      target.constructor,
-      { event, propertyKey },
-    );
+    WsMetadataStorage.getInstance().registerMessageHandler(target.constructor, {
+      event,
+      propertyKey,
+    });
   };
 }
 
 export function WebSocketEvent(event: WsEventType): MethodDecorator {
   return (target: object, propertyKey: string | symbol) => {
-    WsMetadataStorage.getInstance().registerEventHandler(
-      target.constructor,
-      { event, propertyKey },
-    );
+    WsMetadataStorage.getInstance().registerEventHandler(target.constructor, {
+      event,
+      propertyKey,
+    });
   };
 }
 

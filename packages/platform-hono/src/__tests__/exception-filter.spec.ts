@@ -55,7 +55,7 @@ describe('Exception Filters', () => {
     const res = await app.request('/test/not-found');
     expect(res.status).toBe(404);
 
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('CUSTOM_NOT_FOUND');
     expect(body.message).toBe('Item not found');
   });
@@ -69,7 +69,7 @@ describe('Exception Filters', () => {
     const res = await app.request('/test/unmatched');
     expect(res.status).toBe(500);
 
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.error).toBe('INTERNAL_SERVER_ERROR');
   });
 });

@@ -14,9 +14,9 @@ export class WsGatewayHandler {
     const ws = WsMetadataStorage.getInstance();
     const messageHandlers = ws.messageHandlers.get(gatewayClass) || [];
     const eventHandlers = ws.eventHandlers.get(gatewayClass) || [];
-    const connectHandler = eventHandlers.find(e => e.event === 'connect');
-    const disconnectHandler = eventHandlers.find(e => e.event === 'disconnect');
-    const errorHandler = eventHandlers.find(e => e.event === 'error');
+    const connectHandler = eventHandlers.find((e) => e.event === 'connect');
+    const disconnectHandler = eventHandlers.find((e) => e.event === 'disconnect');
+    const errorHandler = eventHandlers.find((e) => e.event === 'error');
 
     const messageMap = new Map<string, string | symbol>();
     for (const mh of messageHandlers) {
@@ -50,18 +50,22 @@ export class WsGatewayHandler {
                 parsed = rawData as Record<string, unknown>;
               }
             } catch {
-              wsRaw.send(JSON.stringify({
-                event: 'error',
-                data: { code: 'PARSE_ERROR', message: 'Invalid JSON' },
-              }));
+              wsRaw.send(
+                JSON.stringify({
+                  event: 'error',
+                  data: { code: 'PARSE_ERROR', message: 'Invalid JSON' },
+                }),
+              );
               return;
             }
 
             if (!parsed) {
-              wsRaw.send(JSON.stringify({
-                event: 'error',
-                data: { code: 'INVALID_FORMAT', message: 'Payload must be a JSON object' },
-              }));
+              wsRaw.send(
+                JSON.stringify({
+                  event: 'error',
+                  data: { code: 'INVALID_FORMAT', message: 'Payload must be a JSON object' },
+                }),
+              );
               return;
             }
 
@@ -75,8 +79,11 @@ export class WsGatewayHandler {
 
             // Contract validation (if @Contract is present on the method)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const contract: { body?: import('zod').ZodTypeAny } | undefined =
-              Reflect.getMetadata('kanji:contract', Object.getPrototypeOf(instance), propertyKey);
+            const contract: { body?: import('zod').ZodTypeAny } | undefined = Reflect.getMetadata(
+              'kanji:contract',
+              Object.getPrototypeOf(instance),
+              propertyKey,
+            );
 
             const method = instance[propertyKey];
             if (typeof method !== 'function') return;
@@ -86,17 +93,19 @@ export class WsGatewayHandler {
             if (contract?.body) {
               const result = contract.body.safeParse(rawPayload);
               if (!result.success) {
-                wsRaw.send(JSON.stringify({
-                  event: 'error',
-                  data: {
-                    code: 'VALIDATION_ERROR',
-                    issues: result.error.issues.map(i => ({
-                      path: i.path.join('.'),
-                      message: i.message,
-                      code: i.code,
-                    })),
-                  },
-                }));
+                wsRaw.send(
+                  JSON.stringify({
+                    event: 'error',
+                    data: {
+                      code: 'VALIDATION_ERROR',
+                      issues: result.error.issues.map((i) => ({
+                        path: i.path.join('.'),
+                        message: i.message,
+                        code: i.code,
+                      })),
+                    },
+                  }),
+                );
                 return;
               }
               ctx = new WebSocketContext(c, wsRaw, result.data);
@@ -104,7 +113,11 @@ export class WsGatewayHandler {
               ctx = new WebSocketContext(c, wsRaw);
             }
 
-            self.invokeHandler(method as (ctx: WebSocketContext) => void | Promise<void>, ctx, wsRaw);
+            self.invokeHandler(
+              method as (ctx: WebSocketContext) => void | Promise<void>,
+              ctx,
+              wsRaw,
+            );
           },
 
           onClose(_evt, wsRaw) {
@@ -152,9 +165,11 @@ export class WsGatewayHandler {
     if (this.logger) {
       this.logger.error(err.message, err.stack, 'WsGatewayHandler');
     }
-    ws.send(JSON.stringify({
-      event: 'error',
-      data: { code: 'INTERNAL_ERROR', message: err.message },
-    }));
+    ws.send(
+      JSON.stringify({
+        event: 'error',
+        data: { code: 'INTERNAL_ERROR', message: err.message },
+      }),
+    );
   }
 }

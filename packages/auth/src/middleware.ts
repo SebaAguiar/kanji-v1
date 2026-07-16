@@ -5,9 +5,7 @@ import type { SessionProvider } from './session.js';
 export function createAuthMiddleware(sessionProvider: SessionProvider): MiddlewareHandler {
   return async (c: Context, next: Next): Promise<void> => {
     const authHeader = c.req.header('Authorization');
-    const token = authHeader?.startsWith('Bearer ')
-      ? authHeader.substring(7)
-      : authHeader;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
 
     if (token) {
       const session = sessionProvider.verifyToken(token);

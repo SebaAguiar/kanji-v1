@@ -1,7 +1,12 @@
 import type { Context } from 'hono';
 import { Controller, Get, Use } from '@kanjijs/platform-hono';
 import { Inject, Injectable } from '@kanjijs/core';
-import { SESSION_PROVIDER, AUTH_CONFIG, type AuthConfig, type OAuthProviderConfig } from './types.js';
+import {
+  SESSION_PROVIDER,
+  AUTH_CONFIG,
+  type AuthConfig,
+  type OAuthProviderConfig,
+} from './types.js';
 import type { SessionProvider } from './session.js';
 import { OAuthProviders } from './providers.js';
 import { getAuthorizationUrl, exchangeCodeForToken, getUserProfile } from './oauth.js';
@@ -32,12 +37,21 @@ export class OAuthController {
     const providerName = c.req.param('provider') ?? '';
 
     if (!isSupportedProvider(providerName)) {
-      return c.json({ error: 'Bad Request', message: `Unsupported provider "${providerName}". Supported: ${SUPPORTED_PROVIDERS.join(', ')}` }, 400);
+      return c.json(
+        {
+          error: 'Bad Request',
+          message: `Unsupported provider "${providerName}". Supported: ${SUPPORTED_PROVIDERS.join(', ')}`,
+        },
+        400,
+      );
     }
 
     const providerConfig = this.getProviderConfig(providerName);
     if (!providerConfig) {
-      return c.json({ error: 'Bad Request', message: `Provider "${providerName}" is not configured` }, 400);
+      return c.json(
+        { error: 'Bad Request', message: `Provider "${providerName}" is not configured` },
+        400,
+      );
     }
 
     const origin = new URL(c.req.url).origin;
@@ -63,25 +77,34 @@ export class OAuthController {
     }
 
     if (!isSupportedProvider(stateEntry.provider)) {
-      return c.json({ error: 'Internal Server Error', message: 'Invalid provider in OAuth state' }, 500);
+      return c.json(
+        { error: 'Internal Server Error', message: 'Invalid provider in OAuth state' },
+        500,
+      );
     }
 
     const providerConfig = this.getProviderConfig(stateEntry.provider);
     if (!providerConfig) {
-      return c.json({ error: 'Internal Server Error', message: 'Provider configuration not found' }, 500);
+      return c.json(
+        { error: 'Internal Server Error', message: 'Provider configuration not found' },
+        500,
+      );
     }
 
     try {
       const accessToken = await exchangeCodeForToken(providerConfig, code, stateEntry.redirectUri);
       const profile = await getUserProfile(providerConfig, accessToken);
 
-      const token = this.session.createToken({
-        userId: profile.id,
-        email: profile.email,
-        name: profile.name ?? profile.email,
-        roles: ['user'],
-        scopes: [],
-      }, 3600);
+      const token = this.session.createToken(
+        {
+          userId: profile.id,
+          email: profile.email,
+          name: profile.name ?? profile.email,
+          roles: ['user'],
+          scopes: [],
+        },
+        3600,
+      );
 
       return c.json({ token, user: { id: profile.id, email: profile.email, name: profile.name } });
     } catch (err) {

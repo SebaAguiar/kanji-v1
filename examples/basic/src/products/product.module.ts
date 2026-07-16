@@ -6,11 +6,7 @@ import { ProductPolicy } from './product.policy';
 
 @KanjijsModule({
   controllers: [ProductController],
-  providers: [
-    ProductRepository,
-    ProductService,
-    ProductPolicy,
-  ],
+  providers: [ProductRepository, ProductService, ProductPolicy],
   exports: [ProductService, ProductPolicy],
 })
 export class ProductModule {}

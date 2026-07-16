@@ -2,11 +2,11 @@ import { capitalize, toSingular } from '../utils/inflection.js';
 
 export const getPolicyTemplate = (
   resourceName: string,
-  actionRules: Record<string, { model: 'role-based' | 'owner-based'; roles?: string[] }>
+  actionRules: Record<string, { model: 'role-based' | 'owner-based'; roles?: string[] }>,
 ): string => {
   const singular = toSingular(resourceName);
   const singularCapitalized = capitalize(singular);
-  
+
   let imports = `import { Injectable } from '@kanjijs/core';\n`;
   imports += `import type { ResourcePolicy } from '@kanjijs/auth';\n`;
   imports += `import type { Context } from 'hono';\n`;

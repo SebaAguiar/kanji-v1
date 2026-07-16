@@ -9,7 +9,7 @@ import {
   getControllerTemplate,
   getTestTemplate,
   detectDatabaseFromAppModule,
-  getPolicyTemplate
+  getPolicyTemplate,
 } from '../index.js';
 
 describe('CLI Generate Command', () => {
@@ -76,7 +76,7 @@ describe('CLI Generate Command', () => {
 
   it('should only log changes without writing to disk during a dry run', async () => {
     const dryRunWorkspace = await mkdtemp(join(tmpdir(), 'kanji-cli-dryrun-'));
-    
+
     const output = execSync(`bun ${cliPath} g resource users --dry-run`, {
       cwd: dryRunWorkspace,
       stdio: 'pipe',
@@ -101,7 +101,7 @@ describe('CLI Generate Command', () => {
   it('should auto-register a standalone module in app.module.ts', async () => {
     const moduleWorkspace = await mkdtemp(join(tmpdir(), 'kanji-cli-mod-'));
     await mkdir(join(moduleWorkspace, 'src'), { recursive: true });
-    
+
     const initialAppModule = `import { KanjijsModule } from '@kanjijs/core';
 import { StoreModule } from '@kanjijs/store';
 
@@ -123,8 +123,10 @@ export class AppModule {}
     });
 
     const updatedAppModule = await Bun.file(appModulePath).text();
-    expect(updatedAppModule).toContain("import { CategoryModule } from './categories/category.module.js';");
-    expect(updatedAppModule).toContain("CategoryModule");
+    expect(updatedAppModule).toContain(
+      "import { CategoryModule } from './categories/category.module.js';",
+    );
+    expect(updatedAppModule).toContain('CategoryModule');
 
     await rm(moduleWorkspace, { recursive: true, force: true });
   });
@@ -132,7 +134,7 @@ export class AppModule {}
   it('should auto-register a standalone controller in an existing local module', async () => {
     const controllerWorkspace = await mkdtemp(join(tmpdir(), 'kanji-cli-ctrl-'));
     await mkdir(join(controllerWorkspace, 'src'), { recursive: true });
-    
+
     execSync(`bun ${cliPath} g module orders`, {
       cwd: controllerWorkspace,
       stdio: 'pipe',
@@ -146,10 +148,14 @@ export class AppModule {}
     const localModulePath = join(controllerWorkspace, 'src', 'orders', 'order.module.ts');
     const localModuleContent = await Bun.file(localModulePath).text();
 
-    expect(localModuleContent).toContain("import { OrderController } from './order.controller.js';");
-    expect(localModuleContent).toContain("OrderController");
+    expect(localModuleContent).toContain(
+      "import { OrderController } from './order.controller.js';",
+    );
+    expect(localModuleContent).toContain('OrderController');
 
-    const indexContent = await Bun.file(join(controllerWorkspace, 'src', 'orders', 'index.ts')).text();
+    const indexContent = await Bun.file(
+      join(controllerWorkspace, 'src', 'orders', 'index.ts'),
+    ).text();
     expect(indexContent).toContain("export * from './order.controller';");
 
     await rm(controllerWorkspace, { recursive: true, force: true });
@@ -172,8 +178,10 @@ export class AppModule {}
     const localModulePath = join(serviceWorkspace, 'src', 'inventory', 'inventory.module.ts');
     const localModuleContent = await Bun.file(localModulePath).text();
 
-    expect(localModuleContent).toContain("import { InventoryService } from './inventory.service.js';");
-    expect(localModuleContent).toContain("InventoryService");
+    expect(localModuleContent).toContain(
+      "import { InventoryService } from './inventory.service.js';",
+    );
+    expect(localModuleContent).toContain('InventoryService');
 
     await rm(serviceWorkspace, { recursive: true, force: true });
   });
@@ -184,7 +192,7 @@ export class AppModule {}
         crudActions: ['findOne'] as any[],
         authModel: 'none' as const,
         dbAdapter: 'none' as const,
-        generateTests: false
+        generateTests: false,
       };
       const template = getContractsTemplate('products', options);
       expect(template).toContain('findOne:');
@@ -197,7 +205,7 @@ export class AppModule {}
         crudActions: ['create', 'findAll'] as any[],
         authModel: 'none' as const,
         dbAdapter: 'mongodb' as const,
-        generateTests: false
+        generateTests: false,
       };
       const template = getRepositoryTemplate('products', options);
       expect(template).toContain("collection('products').insertOne");
@@ -209,7 +217,7 @@ export class AppModule {}
         crudActions: ['findAll'] as any[],
         authModel: 'role-based' as const,
         dbAdapter: 'none' as const,
-        generateTests: false
+        generateTests: false,
       };
       const template = getControllerTemplate('products', options);
       expect(template).toContain("import { UseGuards } from '@kanjijs/auth';");
@@ -221,7 +229,7 @@ export class AppModule {}
         crudActions: ['create'] as any[],
         authModel: 'none' as const,
         dbAdapter: 'none' as const,
-        generateTests: true
+        generateTests: true,
       };
       const template = getTestTemplate('products', options);
       expect(template).not.toContain('DATABASE_CLIENT');
@@ -233,7 +241,9 @@ export class AppModule {}
       await mkdir(join(testWorkspace, 'src'), { recursive: true });
 
       const appModulePath = join(testWorkspace, 'src', 'app.module.ts');
-      await Bun.write(appModulePath, `
+      await Bun.write(
+        appModulePath,
+        `
         import { StoreModule } from '@kanjijs/store';
         @KanjijsModule({
           imports: [
@@ -243,7 +253,8 @@ export class AppModule {}
           ]
         })
         export class AppModule {}
-      `);
+      `,
+      );
 
       process.chdir(testWorkspace);
       try {
@@ -257,13 +268,13 @@ export class AppModule {}
 
     it('should generate policy template correctly based on auth model options', () => {
       const rbacTemplate = getPolicyTemplate('products', {
-        read: { model: 'role-based', roles: ['admin', 'moderator'] }
+        read: { model: 'role-based', roles: ['admin', 'moderator'] },
       });
       expect(rbacTemplate).toContain('export class ProductPolicy implements ResourcePolicy');
       expect(rbacTemplate).toContain('const allowed = ["admin","moderator"]');
 
       const aclTemplate = getPolicyTemplate('products', {
-        update: { model: 'owner-based' }
+        update: { model: 'owner-based' },
       });
       expect(aclTemplate).toContain('resource.userId === user.userId');
     });

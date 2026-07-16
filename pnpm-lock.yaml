@@ -116,6 +116,9 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../common
       '@kanjijs/openapi':
         specifier: workspace:*
         version: link:../openapi

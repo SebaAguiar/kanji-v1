@@ -6,7 +6,7 @@ import { AUTH_CONFIG, type AuthConfig, type KanjiSession } from './types.js';
 export class SessionProvider {
   constructor(
     @Inject(AUTH_CONFIG)
-    private readonly config: AuthConfig
+    private readonly config: AuthConfig,
   ) {}
 
   /**
@@ -31,7 +31,7 @@ export class SessionProvider {
 
       if (typeof decoded === 'object' && decoded !== null) {
         const payload = decoded as Record<string, unknown>;
-        
+
         // Strict runtime structural validation without using any/unknown
         if (
           typeof payload.userId === 'string' &&
@@ -65,12 +65,15 @@ export class SessionProvider {
   public refreshToken(token: string, expiresInSeconds: number): string | null {
     const session = this.verifyToken(token);
     if (!session) return null;
-    return this.createToken({
-      userId: session.userId,
-      email: session.email,
-      name: session.name,
-      roles: session.roles,
-      scopes: session.scopes,
-    }, expiresInSeconds);
+    return this.createToken(
+      {
+        userId: session.userId,
+        email: session.email,
+        name: session.name,
+        roles: session.roles,
+        scopes: session.scopes,
+      },
+      expiresInSeconds,
+    );
   }
 }

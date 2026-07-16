@@ -7,7 +7,9 @@ describe('TestingModule Builder', () => {
   it('should compile a testing module and resolve basic providers', async () => {
     @Injectable()
     class HelloService {
-      greet() { return 'hello'; }
+      greet() {
+        return 'hello';
+      }
     }
 
     @KanjijsModule({
@@ -29,16 +31,11 @@ describe('TestingModule Builder', () => {
 
     @Injectable()
     class ConsumerService {
-      constructor(
-        @Inject(MY_TOKEN) public readonly value: string
-      ) {}
+      constructor(@Inject(MY_TOKEN) public readonly value: string) {}
     }
 
     @KanjijsModule({
-      providers: [
-        { provide: MY_TOKEN, useValue: 'original-value' },
-        ConsumerService,
-      ],
+      providers: [{ provide: MY_TOKEN, useValue: 'original-value' }, ConsumerService],
     })
     class RootModule {}
 

@@ -8,12 +8,14 @@ export class Container {
   private readonly moduleProviders = new Map<Constructor<object>, Set<Token<object>>>();
   private readonly moduleExports = new Map<Constructor<object>, Set<Token<object>>>();
   private readonly globalProviders = new Set<Token<object>>();
-  private readonly providerRegistry = new Map<Constructor<object>, Map<Token<object>, Provider<object>>>();
+  private readonly providerRegistry = new Map<
+    Constructor<object>,
+    Map<Token<object>, Provider<object>>
+  >();
   private readonly initializedModules = new Set<Constructor<object>>();
   private readonly moduleControllers = new Map<Constructor<object>, Set<Constructor<object>>>();
   private readonly moduleGateways = new Map<Constructor<object>, Set<Constructor<object>>>();
   private readonly logger?: KanjiLogger;
-
 
   constructor(opts?: { logger?: KanjiLogger | boolean }) {
     if (opts?.logger === true || opts?.logger === undefined) {
@@ -152,7 +154,7 @@ export class Container {
       throw new Error(
         `Dependency injection error: Token "${String(
           token,
-        )}" is not visible in module "${contextModule.name}". Make sure it is exported by an imported module or marked global.`
+        )}" is not visible in module "${contextModule.name}". Make sure it is exported by an imported module or marked global.`,
       );
     }
 
@@ -192,7 +194,7 @@ export class Container {
 
     if (resolutionStack.includes(token)) {
       throw new Error(
-        `Circular dependency detected: ${resolutionStack.map(t => String(t)).join(' -> ')} -> ${String(token)}`
+        `Circular dependency detected: ${resolutionStack.map((t) => String(t)).join(' -> ')} -> ${String(token)}`,
       );
     }
 
@@ -208,7 +210,11 @@ export class Container {
       if (typeof token === 'function') {
         const metadataStorage = MetadataStorage.getInstance();
         if (metadataStorage.injectables.has(token as Constructor<object>)) {
-          const instance = await this.instantiateClass(token as Constructor<object>, providerModule, resolutionStack);
+          const instance = await this.instantiateClass(
+            token as Constructor<object>,
+            providerModule,
+            resolutionStack,
+          );
           this.instances.set(token, instance);
           return instance as T;
         }
@@ -219,7 +225,11 @@ export class Container {
     let instance: object;
 
     if (typeof provider === 'function') {
-      instance = await this.instantiateClass(provider as Constructor<object>, providerModule, resolutionStack);
+      instance = await this.instantiateClass(
+        provider as Constructor<object>,
+        providerModule,
+        resolutionStack,
+      );
     } else if ('useValue' in provider) {
       instance = provider.useValue;
     } else if ('useClass' in provider) {
@@ -227,10 +237,10 @@ export class Container {
     } else if ('useFactory' in provider) {
       const injectTokens = provider.inject || [];
       const injectedDeps = await Promise.all(
-        injectTokens.map(depToken => this.resolve(depToken, providerModule, resolutionStack))
+        injectTokens.map((depToken) => this.resolve(depToken, providerModule, resolutionStack)),
       );
       const factoryResult = provider.useFactory(...injectedDeps);
-      instance = await factoryResult as object;
+      instance = (await factoryResult) as object;
     } else {
       throw new Error(`Invalid provider definition for token "${String(token)}".`);
     }
@@ -248,18 +258,20 @@ export class Container {
     const paramTypes: Constructor<object>[] = Reflect.getMetadata('design:paramtypes', clazz) || [];
     const customInjections = MetadataStorage.getInstance().customInjections.get(clazz) || [];
 
-    const args = await Promise.all(paramTypes.map(async (paramType, index) => {
-      const customInjection = customInjections.find(ci => ci.index === index);
-      const tokenToResolve = customInjection ? customInjection.token : paramType;
+    const args = await Promise.all(
+      paramTypes.map(async (paramType, index) => {
+        const customInjection = customInjections.find((ci) => ci.index === index);
+        const tokenToResolve = customInjection ? customInjection.token : paramType;
 
-      if (!tokenToResolve) {
-        throw new Error(
-          `Cannot resolve parameter at index ${index} for class "${clazz.name}". Ensure that parameter type is a valid class or decorated with @Inject().`
-        );
-      }
+        if (!tokenToResolve) {
+          throw new Error(
+            `Cannot resolve parameter at index ${index} for class "${clazz.name}". Ensure that parameter type is a valid class or decorated with @Inject().`,
+          );
+        }
 
-      return this.resolve(tokenToResolve, moduleContext, resolutionStack);
-    }));
+        return this.resolve(tokenToResolve, moduleContext, resolutionStack);
+      }),
+    );
 
     return new clazz(...(args as never[]));
   }
@@ -316,7 +328,8 @@ export class Container {
   }
 
   public getControllers(): Array<{ controller: Constructor<object>; module: Constructor<object> }> {
-    const controllersList: Array<{ controller: Constructor<object>; module: Constructor<object> }> = [];
+    const controllersList: Array<{ controller: Constructor<object>; module: Constructor<object> }> =
+      [];
     for (const [moduleClass, controllers] of this.moduleControllers.entries()) {
       for (const controller of controllers) {
         controllersList.push({ controller, module: moduleClass });
@@ -383,4 +396,3 @@ export class Container {
     }
   }
 }
-

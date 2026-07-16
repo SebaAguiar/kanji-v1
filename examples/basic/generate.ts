@@ -19,14 +19,18 @@ async function generate() {
   };
   const generator = new OpenApiGenerator(openapiConfig);
   const spec = generator.generateSpec();
-  
-  await fs.writeFile(path.join(import.meta.dirname, 'src/openapi.json'), JSON.stringify(spec, null, 2), 'utf-8');
+
+  await fs.writeFile(
+    path.join(import.meta.dirname, 'src/openapi.json'),
+    JSON.stringify(spec, null, 2),
+    'utf-8',
+  );
   console.log('✅ OpenAPI Spec generated in src/openapi.json');
 
   const sdkGenerator = new SdkGenerator();
   await sdkGenerator.generateToFile(spec, path.join(import.meta.dirname, 'src/sdk.ts'));
   console.log('✅ Client SDK generated in src/sdk.ts');
-  
+
   process.exit(0);
 }
 

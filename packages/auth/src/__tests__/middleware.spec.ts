@@ -22,7 +22,7 @@ describe('Auth Middleware', () => {
     const app = new Hono();
 
     app.use('*', createAuthMiddleware(sessionProvider));
-    
+
     let ctxUser: { id: string; email: string; name: string; roles: string[] } | null = null;
     app.get('/me', (c) => {
       ctxUser = c.get(KANJI_CTX.AUTH_USER);
@@ -44,7 +44,7 @@ describe('Auth Middleware', () => {
   it('should continue middleware chain but not authenticate when header is missing', async () => {
     const app = new Hono();
     app.use('*', createAuthMiddleware(sessionProvider));
-    
+
     let ctxUser: { id: string; email: string; name: string; roles: string[] } | undefined;
     app.get('/me', (c) => {
       ctxUser = c.get(KANJI_CTX.AUTH_USER);

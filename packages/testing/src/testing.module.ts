@@ -5,7 +5,7 @@ import type { HttpMetadataStorage as HttpMetadataStorageType } from '@kanjijs/pl
 export class TestingModule {
   constructor(
     public readonly app: Hono,
-    public readonly container: Container
+    public readonly container: Container,
   ) {}
 
   public async get<T extends object>(token: Token<T>): Promise<T> {
@@ -27,7 +27,7 @@ export class TestingModule {
 
     throw new Error(
       `TestingModule: Provider for token "${String(token)}" could not be resolved from any initialized module.` +
-      (lastError ? ` Last resolution error: ${lastError.message}` : '')
+        (lastError ? ` Last resolution error: ${lastError.message}` : ''),
     );
   }
 }
@@ -40,12 +40,14 @@ export class TestingModuleBuilder {
     this.imports = metadata.imports;
   }
 
-  public overrideProvider<T extends object>(token: Token<T>): { useValue: (value: T) => TestingModuleBuilder } {
+  public overrideProvider<T extends object>(
+    token: Token<T>,
+  ): { useValue: (value: T) => TestingModuleBuilder } {
     return {
       useValue: (value: T): TestingModuleBuilder => {
         this.overrides.set(token, value);
         return this;
-      }
+      },
     };
   }
 
@@ -77,7 +79,7 @@ export class TestingModuleBuilder {
         continue;
       }
 
-      const controllerInstance = await container.resolve(controller, moduleClass) as Record<
+      const controllerInstance = (await container.resolve(controller, moduleClass)) as Record<
         string | symbol,
         (c: Context) => Promise<Response | void>
       >;
@@ -97,7 +99,10 @@ export class TestingModuleBuilder {
         };
 
         const handlers = [...middlewaresToApply, handler] as import('hono').Handler[];
-        const appRef = app as unknown as Record<string, (path: string, ...h: import('hono').Handler[]) => void>;
+        const appRef = app as unknown as Record<
+          string,
+          (path: string, ...h: import('hono').Handler[]) => void
+        >;
         appRef[route.method.toLowerCase()](fullPath, ...handlers);
       }
     }
@@ -109,5 +114,5 @@ export class TestingModuleBuilder {
 export const Test = {
   createTestingModule(metadata: { imports: Constructor<object>[] }): TestingModuleBuilder {
     return new TestingModuleBuilder(metadata);
-  }
+  },
 };

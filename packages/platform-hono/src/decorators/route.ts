@@ -9,14 +9,14 @@ function createRouteDecorator(method: HttpMethod) {
         'kanji:http:method',
         { method: method.toUpperCase(), path },
         target,
-        propertyKey
+        propertyKey,
       );
 
       const location = captureLocation();
       if (location) {
         Reflect.defineMetadata('kanji:location', location, target, propertyKey);
       }
-      
+
       HttpMetadataStorage.getInstance().registerRoute(target.constructor, {
         propertyKey,
         method,

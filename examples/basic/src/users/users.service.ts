@@ -6,19 +6,19 @@ import type { CreateUserInput } from './users.contracts.js';
 export class UsersService {
   constructor(
     @Inject(DATABASE_CLIENT)
-    private readonly db: Database
+    private readonly db: Database,
   ) {}
 
   async create(input: CreateUserInput) {
     const id = crypto.randomUUID();
-    
+
     // We utilize the Database proxy query builder interface
     await this.db.query.users.insert({
       id,
       email: input.email,
       name: input.name,
     });
-    
+
     return {
       id,
       ...input,

@@ -31,10 +31,15 @@ describe('clp (Class-Level Permissions)', () => {
     const app = new Hono();
     const rule = clp({ delete: { role: 'admin' } });
 
-    app.delete('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['admin'] });
-      return next();
-    }, rule, (c) => c.text('deleted'));
+    app.delete(
+      '/posts',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['admin'] });
+        return next();
+      },
+      rule,
+      (c) => c.text('deleted'),
+    );
 
     const res = await app.request('/posts', { method: 'DELETE' });
     expect(res.status).toBe(200);
@@ -45,10 +50,15 @@ describe('clp (Class-Level Permissions)', () => {
     const app = new Hono();
     const rule = clp({ delete: { role: 'admin' } });
 
-    app.delete('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['user'] });
-      return next();
-    }, rule, (c) => c.text('deleted'));
+    app.delete(
+      '/posts',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['user'] });
+        return next();
+      },
+      rule,
+      (c) => c.text('deleted'),
+    );
 
     const res = await app.request('/posts', { method: 'DELETE' });
     expect(res.status).toBe(403);
@@ -58,10 +68,15 @@ describe('clp (Class-Level Permissions)', () => {
     const app = new Hono();
     const rule = clp({ delete: { anyRole: ['admin', 'moderator'] } });
 
-    app.delete('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['moderator'] });
-      return next();
-    }, rule, (c) => c.text('deleted'));
+    app.delete(
+      '/posts',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['moderator'] });
+        return next();
+      },
+      rule,
+      (c) => c.text('deleted'),
+    );
 
     const res = await app.request('/posts', { method: 'DELETE' });
     expect(res.status).toBe(200);
@@ -82,10 +97,15 @@ describe('clp (Class-Level Permissions)', () => {
     const app = new Hono();
     const rule = clp({ read: { authenticated: true } });
 
-    app.get('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: [] });
-      return next();
-    }, rule, (c) => c.text('ok'));
+    app.get(
+      '/posts',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: [] });
+        return next();
+      },
+      rule,
+      (c) => c.text('ok'),
+    );
 
     const res = await app.request('/posts');
     expect(res.status).toBe(200);
@@ -95,10 +115,15 @@ describe('clp (Class-Level Permissions)', () => {
     const app = new Hono();
     const rule = clp({}); // empty — no rules defined
 
-    app.get('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: [] });
-      return next();
-    }, rule, (c) => c.text('ok'));
+    app.get(
+      '/posts',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: [] });
+        return next();
+      },
+      rule,
+      (c) => c.text('ok'),
+    );
 
     const res = await app.request('/posts');
     expect(res.status).toBe(403);
@@ -110,10 +135,15 @@ describe('clp (Class-Level Permissions)', () => {
     const app = new Hono();
     const rule = clp({ list: { role: 'admin' } });
 
-    app.get('/posts', (c, next) => {
-      c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['user'] });
-      return next();
-    }, rule, (c) => c.text('list-ok'));
+    app.get(
+      '/posts',
+      (c, next) => {
+        c.set(KANJI_CTX.AUTH_USER, { id: '1', email: '', name: '', roles: ['user'] });
+        return next();
+      },
+      rule,
+      (c) => c.text('list-ok'),
+    );
 
     const res = await app.request('/posts');
     expect(res.status).toBe(403); // user is not admin
@@ -130,21 +160,26 @@ describe('acl (Access Control List)', () => {
   it('should allow access if policy evaluates to true', async () => {
     const app = new Hono();
     const mockContainer = {
-      resolve: (_key: unknown, _mod: unknown) => new MockPolicy()
+      resolve: (_key: unknown, _mod: unknown) => new MockPolicy(),
     };
 
     const guard = acl({
       policy: MockPolicy,
       action: 'read',
       contextModule: DummyModule,
-      resourceResolver: async (c, id) => ({ id, ownerId: 'user-1' })
+      resourceResolver: async (c, id) => ({ id, ownerId: 'user-1' }),
     });
 
-    app.get('/posts/:id', (c, next) => {
-      c.set(KANJI_CTX.CONTAINER, mockContainer as never);
-      c.set(KANJI_CTX.AUTH_USER, { id: 'user-1', email: '', name: '', roles: [] });
-      return next();
-    }, guard, (c) => c.text('ok'));
+    app.get(
+      '/posts/:id',
+      (c, next) => {
+        c.set(KANJI_CTX.CONTAINER, mockContainer as never);
+        c.set(KANJI_CTX.AUTH_USER, { id: 'user-1', email: '', name: '', roles: [] });
+        return next();
+      },
+      guard,
+      (c) => c.text('ok'),
+    );
 
     const res = await app.request('/posts/post-1');
     expect(res.status).toBe(200);
@@ -154,21 +189,26 @@ describe('acl (Access Control List)', () => {
   it('should block access if policy evaluates to false', async () => {
     const app = new Hono();
     const mockContainer = {
-      resolve: (_key: unknown, _mod: unknown) => new MockPolicy()
+      resolve: (_key: unknown, _mod: unknown) => new MockPolicy(),
     };
 
     const guard = acl({
       policy: MockPolicy,
       action: 'read',
       contextModule: DummyModule,
-      resourceResolver: async (c, id) => ({ id, ownerId: 'user-2' })
+      resourceResolver: async (c, id) => ({ id, ownerId: 'user-2' }),
     });
 
-    app.get('/posts/:id', (c, next) => {
-      c.set(KANJI_CTX.CONTAINER, mockContainer as never);
-      c.set(KANJI_CTX.AUTH_USER, { id: 'user-1', email: '', name: '', roles: [] });
-      return next();
-    }, guard, (c) => c.text('ok'));
+    app.get(
+      '/posts/:id',
+      (c, next) => {
+        c.set(KANJI_CTX.CONTAINER, mockContainer as never);
+        c.set(KANJI_CTX.AUTH_USER, { id: 'user-1', email: '', name: '', roles: [] });
+        return next();
+      },
+      guard,
+      (c) => c.text('ok'),
+    );
 
     const res = await app.request('/posts/post-1');
     expect(res.status).toBe(403);
