@@ -11,6 +11,8 @@ import { registerOpenApiCommand } from './commands/openapi.js';
 import { registerSdkCommand } from './commands/sdk.js';
 import { registerAuthCommand } from './commands/auth.js';
 import { registerEnvCommand } from './commands/env.js';
+import { registerCheckCommand } from './commands/check.js';
+import { registerInitCiCommand } from './commands/init-ci.js';
 
 const program = new Command();
 
@@ -30,6 +32,8 @@ registerOpenApiCommand(program);
 registerSdkCommand(program);
 registerAuthCommand(program);
 registerEnvCommand(program);
+registerCheckCommand(program);
+registerInitCiCommand(program);
 
 if (import.meta.main) {
   program.parse(process.argv);

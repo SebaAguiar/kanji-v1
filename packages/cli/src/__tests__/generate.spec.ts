@@ -279,4 +279,58 @@ export class AppModule {}
       expect(aclTemplate).toContain('resource.userId === user.userId');
     });
   });
+
+  it('should generate auth endpoints and controller with --endpoints', async () => {
+    const authWorkspace = await mkdtemp(join(tmpdir(), 'kanji-cli-auth-'));
+    await mkdir(join(authWorkspace, 'src'), { recursive: true });
+
+    const appModulePath = join(authWorkspace, 'src', 'app.module.ts');
+    await Bun.write(
+      appModulePath,
+      `import { KanjijsModule } from '@kanjijs/core';\n@KanjijsModule({})\nexport class AppModule {}\n`,
+    );
+
+    execSync(`bun ${cliPath} g auth --endpoints`, {
+      cwd: authWorkspace,
+      stdio: 'pipe',
+    });
+
+    const targetDir = join(authWorkspace, 'src', 'auth');
+    const files = await readdir(targetDir);
+    expect(files).toContain('auth.module.ts');
+    expect(files).toContain('auth.controller.ts');
+
+    const appModuleContent = await Bun.file(appModulePath).text();
+    expect(appModuleContent).toContain('AuthModule');
+    expect(appModuleContent).toContain("import { AuthModule } from './auth/auth.module.js';");
+
+    await rm(authWorkspace, { recursive: true, force: true });
+  });
+
+  it('should generate webhook integration files with default non-interactive options', async () => {
+    const webhookWorkspace = await mkdtemp(join(tmpdir(), 'kanji-cli-webhook-'));
+    await mkdir(join(webhookWorkspace, 'src'), { recursive: true });
+
+    const appModulePath = join(webhookWorkspace, 'src', 'app.module.ts');
+    await Bun.write(
+      appModulePath,
+      `import { KanjijsModule } from '@kanjijs/core';\n@KanjijsModule({})\nexport class AppModule {}\n`,
+    );
+
+    execSync(`bun ${cliPath} g webhook stripe`, {
+      cwd: webhookWorkspace,
+      stdio: 'pipe',
+    });
+
+    const targetDir = join(webhookWorkspace, 'src', 'webhooks', 'stripe');
+    const files = await readdir(targetDir);
+    expect(files).toContain('stripe.webhook.ts');
+    expect(files).toContain('stripe.webhook.module.ts');
+    expect(files).toContain('events.ts');
+
+    const appModuleContent = await Bun.file(appModulePath).text();
+    expect(appModuleContent).toContain('StripeWebhookModule');
+
+    await rm(webhookWorkspace, { recursive: true, force: true });
+  });
 });

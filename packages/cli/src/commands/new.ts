@@ -2,30 +2,200 @@ import { Command } from 'commander';
 import pc from 'picocolors';
 import { join } from 'path';
 import { mkdir, writeFile } from 'fs/promises';
+import prompts from 'prompts';
+import { execSync } from 'child_process';
+import { printNextSteps } from '../utils/next-steps.js';
+import { DatabaseType, AuthProvider, CiPlatform, PackageManager, ProjectOptions } from '../types.js';
 import {
   getPackageJsonTemplate,
   getTsConfigTemplate,
   getMainTsTemplate,
   getAppModuleTemplate,
   getAppControllerTemplate,
+  getGitIgnoreTemplate,
+  getReadmeTemplate,
+  getAppE2ETestTemplate,
+  getDbSchemaTemplate,
+  getDbSeedTemplate,
 } from '../templates/project.js';
+import { getDockerComposeTemplate } from '../templates/docker-compose.js';
+import { getDrizzleConfigTemplate } from '../templates/drizzle-config.js';
+import { getGitHubActionsTemplate } from '../templates/ci/github-actions.js';
+import { getGitLabCITemplate } from '../templates/ci/gitlab-ci.js';
+import { getAuthModuleTemplate } from '../templates/auth-endpoints.js';
+
+interface CliNewOptions {
+  minimal: boolean;
+  db?: string;
+  auth?: string;
+  openapi?: boolean;
+  docker?: boolean;
+  ci?: string;
+  tests?: boolean;
+  pm?: string;
+  install: boolean;
+}
 
 export function registerNewCommand(program: Command) {
   program
     .command('new')
-    .argument('<app-name>', 'Name of the new application')
-    .action(async (appName: string) => {
+    .argument('[app-name]', 'Name of the new application')
+    .option('-m, --minimal', 'Create a minimal scaffold without prompts', false)
+    .option('-d, --db <type>', 'Database adapter (postgres, mongodb, none)')
+    .option('-a, --auth <providers>', 'Comma-separated auth providers (jwt, google, github, microsoft)')
+    .option('--openapi', 'Enable OpenAPI documentation')
+    .option('--docker', 'Generate Docker Compose file')
+    .option('--ci <platform>', 'CI pipeline config (github, gitlab, none)')
+    .option('--tests', 'Generate test suite')
+    .option('--pm <manager>', 'Package manager to use (bun, npm, pnpm)')
+    .option('--no-install', 'Do not run package manager install automatically')
+    .action(async (nameArg: string | undefined, options: CliNewOptions) => {
+      const isInteractive =
+        !options.minimal &&
+        !options.db &&
+        !options.auth &&
+        options.openapi === undefined &&
+        options.docker === undefined &&
+        !options.ci &&
+        options.tests === undefined &&
+        !options.pm;
+
+      let appName = nameArg;
+      let pm = options.pm as PackageManager | undefined;
+      let db = options.db as DatabaseType | undefined;
+      let auth: AuthProvider[] = [];
+      let openapi = options.openapi;
+      let docker = options.docker;
+      let ci = options.ci as CiPlatform | undefined;
+      let tests = options.tests;
+
+      if (isInteractive) {
+        console.log(pc.cyan('Welcome to the Kanji Framework installer! 🚀\n'));
+
+        if (!appName) {
+          const res = await prompts({
+            type: 'text',
+            name: 'appName',
+            message: 'Application name:',
+            initial: 'my-api',
+            validate: (val: string) => (val.trim().length > 0 ? true : 'App name is required'),
+          });
+          appName = res.appName;
+          if (!appName) process.exit(0);
+        }
+
+        const resPm = await prompts({
+          type: 'select',
+          name: 'pm',
+          message: 'Package manager:',
+          choices: [
+            { title: 'bun', value: 'bun' },
+            { title: 'npm', value: 'npm' },
+            { title: 'pnpm', value: 'pnpm' },
+          ],
+        });
+        pm = resPm.pm;
+        if (!pm) process.exit(0);
+
+        const resDb = await prompts({
+          type: 'select',
+          name: 'db',
+          message: 'Database:',
+          choices: [
+            { title: 'PostgreSQL (Drizzle ORM)', value: 'postgres' },
+            { title: 'MongoDB (Native adapter)', value: 'mongodb' },
+            { title: 'None', value: 'none' },
+          ],
+        });
+        db = resDb.db;
+        if (!db) process.exit(0);
+
+        const resAuth = await prompts({
+          type: 'multiselect',
+          name: 'auth',
+          message: 'Auth providers:',
+          choices: [
+            { title: 'JWT (Local login/refresh)', value: 'jwt' },
+            { title: 'Google (OAuth)', value: 'google' },
+            { title: 'GitHub (OAuth)', value: 'github' },
+            { title: 'Microsoft (OAuth)', value: 'microsoft' },
+          ],
+        });
+        auth = resAuth.auth || [];
+
+        const resOpenapi = await prompts({
+          type: 'confirm',
+          name: 'openapi',
+          message: 'Enable OpenAPI documentation?',
+          initial: true,
+        });
+        openapi = resOpenapi.openapi;
+
+        const resDocker = await prompts({
+          type: 'confirm',
+          name: 'docker',
+          message: 'Generate Docker Compose file?',
+          initial: true,
+        });
+        docker = resDocker.docker;
+
+        const resCi = await prompts({
+          type: 'select',
+          name: 'ci',
+          message: 'CI/CD pipeline:',
+          choices: [
+            { title: 'GitHub Actions', value: 'github' },
+            { title: 'GitLab CI', value: 'gitlab' },
+            { title: 'None', value: 'none' },
+          ],
+        });
+        ci = resCi.ci;
+        if (!ci) process.exit(0);
+
+        const resTests = await prompts({
+          type: 'confirm',
+          name: 'tests',
+          message: 'Generate example tests?',
+          initial: true,
+        });
+        tests = resTests.tests;
+      } else {
+        appName = nameArg || 'my-api';
+        pm = (options.pm || 'bun') as PackageManager;
+        db = (options.db || 'none') as DatabaseType;
+        auth = options.auth
+          ? (options.auth.split(',').map((s) => s.trim()) as AuthProvider[])
+          : [];
+        openapi = options.openapi ?? false;
+        docker = options.docker ?? false;
+        ci = (options.ci || 'none') as CiPlatform;
+        tests = options.tests ?? false;
+      }
+
+      const projOpts: ProjectOptions = {
+        appName,
+        db,
+        auth,
+        openapi,
+        docker,
+        ci,
+        tests,
+        pm,
+      };
+
       const targetDir = join(process.cwd(), appName);
-      console.log(pc.cyan(`Creating a new Kanji project in ${targetDir}...`));
+      console.log(pc.cyan(`\nCreating a new Kanji project in ${targetDir}...`));
 
       try {
         await mkdir(join(targetDir, 'src'), { recursive: true });
 
-        const packageJson = getPackageJsonTemplate(appName);
+        const packageJson = getPackageJsonTemplate(appName, projOpts);
         const tsconfigJson = getTsConfigTemplate();
         const mainTs = getMainTsTemplate();
-        const appModuleTs = getAppModuleTemplate();
+        const appModuleTs = getAppModuleTemplate(projOpts);
         const appControllerTs = getAppControllerTemplate();
+        const gitignore = getGitIgnoreTemplate();
+        const readme = getReadmeTemplate(appName, projOpts);
 
         await writeFile(
           join(targetDir, 'package.json'),
@@ -40,14 +210,89 @@ export function registerNewCommand(program: Command) {
         await writeFile(join(targetDir, 'src', 'main.ts'), mainTs, 'utf-8');
         await writeFile(join(targetDir, 'src', 'app.module.ts'), appModuleTs, 'utf-8');
         await writeFile(join(targetDir, 'src', 'app.controller.ts'), appControllerTs, 'utf-8');
-        await writeFile(
-          join(targetDir, '.env.example'),
-          'PORT=3000\nJWT_SECRET=super-secret-key-change-me\n',
-          'utf-8',
-        );
+        await writeFile(join(targetDir, '.gitignore'), gitignore, 'utf-8');
+        await writeFile(join(targetDir, 'README.md'), readme, 'utf-8');
+
+        // Conditionally generate .env.example
+        let envContent = 'PORT=3000\n';
+        if (auth.length > 0) {
+          envContent += 'JWT_SECRET=super-secret-key-change-me\n';
+        }
+        if (db === 'postgres') {
+          envContent += 'DATABASE_URL=postgres://postgres:postgres@localhost:5432/kanji_db\n';
+        } else if (db === 'mongodb') {
+          envContent += 'DATABASE_URL=mongodb://root:password@localhost:27017/kanji_db?authSource=admin\n';
+        }
+        await writeFile(join(targetDir, '.env.example'), envContent, 'utf-8');
+        await writeFile(join(targetDir, '.env'), envContent, 'utf-8'); // Generate default active .env
+
+        // Conditionally generate docker-compose
+        if (docker || db !== 'none') {
+          const dockerComposeContent = getDockerComposeTemplate(db || 'none');
+          if (dockerComposeContent) {
+            await writeFile(join(targetDir, 'docker-compose.yml'), dockerComposeContent, 'utf-8');
+          }
+        }
+
+        // Conditionally generate Drizzle configurations
+        if (db === 'postgres') {
+          const drizzleConfig = getDrizzleConfigTemplate();
+          await writeFile(join(targetDir, 'drizzle.config.ts'), drizzleConfig, 'utf-8');
+
+          await mkdir(join(targetDir, 'src', 'db', 'schema'), { recursive: true });
+          await writeFile(join(targetDir, 'src', 'db', 'schema', 'index.ts'), getDbSchemaTemplate(), 'utf-8');
+          await writeFile(join(targetDir, 'src', 'db', 'seed.ts'), getDbSeedTemplate(), 'utf-8');
+        }
+
+        // Conditionally generate Auth
+        if (auth.length > 0) {
+          const authTemplates = getAuthModuleTemplate(auth);
+          await mkdir(join(targetDir, 'src', 'auth'), { recursive: true });
+          await writeFile(join(targetDir, 'src', 'auth', 'auth.module.ts'), authTemplates.module, 'utf-8');
+          await writeFile(join(targetDir, 'src', 'auth', 'auth.controller.ts'), authTemplates.controller, 'utf-8');
+        }
+
+        // Conditionally generate CI pipeline
+        if (ci === 'github') {
+          const ciTemplate = getGitHubActionsTemplate(projOpts);
+          await mkdir(join(targetDir, '.github', 'workflows'), { recursive: true });
+          await writeFile(join(targetDir, '.github', 'workflows', 'ci.yml'), ciTemplate, 'utf-8');
+        } else if (ci === 'gitlab') {
+          const ciTemplate = getGitLabCITemplate(projOpts);
+          await writeFile(join(targetDir, '.gitlab-ci.yml'), ciTemplate, 'utf-8');
+        }
+
+        // Conditionally generate Tests
+        if (tests) {
+          await mkdir(join(targetDir, 'src', '__tests__'), { recursive: true });
+          await writeFile(join(targetDir, 'src', '__tests__', 'app.e2e.spec.ts'), getAppE2ETestTemplate(), 'utf-8');
+        }
 
         console.log(pc.bold(pc.green(`\nKanji project "${appName}" successfully created! 🚀`)));
-        console.log(pc.yellow(`Next steps:\n  cd ${appName}\n  bun install\n  bun dev`));
+
+        // Git init & Install dependencies
+        if (options.install !== false) {
+          try {
+            console.log(pc.cyan('\nInitializing Git repository...'));
+            execSync('git init', { cwd: targetDir, stdio: 'ignore' });
+          } catch {
+            console.warn(pc.yellow('Warning: Could not initialize git repository automatically.'));
+          }
+
+          try {
+            const installCmd = pm === 'bun' ? 'bun install' : `${pm} install`;
+            console.log(pc.cyan(`Running ${installCmd} in project root...`));
+            execSync(installCmd, { cwd: targetDir, stdio: 'inherit' });
+          } catch {
+            console.warn(pc.yellow('Warning: Could not install dependencies automatically.'));
+          }
+        }
+
+        printNextSteps('project', appName, {
+          pm,
+          db,
+        });
+
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error(pc.red(`Error creating project: ${msg}`));
