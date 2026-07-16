@@ -2,7 +2,13 @@ import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage';
 import type { KanjijsAdapterOptions } from './types';
-import { KanjiLogger, DefaultConsoleLogger, KanjiError, ValidationError, getExceptionFilterTargets } from '@kanjijs/common';
+import {
+  KanjiLogger,
+  DefaultConsoleLogger,
+  KanjiError,
+  ValidationError,
+  getExceptionFilterTargets,
+} from '@kanjijs/common';
 import type { ValidationResult } from '@kanjijs/contracts';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { ExceptionFilterService } from './exception-filter.service.js';
@@ -76,7 +82,7 @@ export class KanjijsAdapter {
       if (err instanceof KanjiError) {
         return c.json(
           { error: err.code, message: err.message, issues: [] },
-          err.statusCode as 400 | 401 | 403 | 404 | 409 | 500,
+          err.statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500,
         );
       }
 
@@ -107,7 +113,7 @@ export class KanjijsAdapter {
     const sessionProviderToken = Symbol.for('kanji:session_provider');
     if (container.hasProvider(sessionProviderToken, rootModule)) {
       const sessionProvider = await container.resolve(sessionProviderToken, rootModule);
-      const authModule = await import('@kanjijs/auth') as AuthModuleExport;
+      const authModule = (await import('@kanjijs/auth')) as AuthModuleExport;
       app.use('*', authModule.createAuthMiddleware(sessionProvider));
       if (activeLogger) {
         activeLogger.log('Session authentication middleware auto-wired', 'InstanceLoader');
@@ -124,7 +130,8 @@ export class KanjijsAdapter {
     const controllers = container.getControllers();
 
     // Run granular contract validation checks
-    const { ContractValidator, getControllerContract, ValidationSeverity } = await import('@kanjijs/contracts');
+    const { ContractValidator, getControllerContract, ValidationSeverity } =
+      await import('@kanjijs/contracts');
     const validationResults: ValidationResult[] = [];
     let hasErrors = false;
 
@@ -144,7 +151,7 @@ export class KanjijsAdapter {
         const locationName = result.location.method
           ? `${result.location.controller}.${result.location.method}`
           : result.location.controller;
-        
+
         const fileLoc = result.location.file ? ` (${result.location.file})` : '';
         const message = `${prefix} [${locationName}]${fileLoc} ${result.message}`;
         const suggestionLine = result.suggestion ? `   → ${result.suggestion}` : undefined;
@@ -171,7 +178,7 @@ export class KanjijsAdapter {
     if (hasErrors) {
       throw new Error(
         '[Kanji] Contract validation failed with errors (see above). ' +
-        'Fix the inconsistencies before running the application.'
+          'Fix the inconsistencies before running the application.',
       );
     }
 
@@ -179,7 +186,7 @@ export class KanjijsAdapter {
       const controllerPath = httpMetadata.controllers.get(controller);
       if (controllerPath === undefined) {
         throw new Error(
-          `Controller "${controller.name}" registered in module "${moduleClass.name}" is missing @Controller() decorator`
+          `Controller "${controller.name}" registered in module "${moduleClass.name}" is missing @Controller() decorator`,
         );
       }
 
@@ -187,7 +194,7 @@ export class KanjijsAdapter {
         activeLogger.log(`${controller.name} {${controllerPath}}`, 'RoutesResolver');
       }
 
-      const controllerInstance = await container.resolve(controller, moduleClass) as Record<
+      const controllerInstance = (await container.resolve(controller, moduleClass)) as Record<
         string | symbol,
         (c: Context) => Promise<Response> | Response
       >;
@@ -199,11 +206,26 @@ export class KanjijsAdapter {
         const fullPath = `${controllerPath}${route.path}`.replace(/\/+/g, '/');
         const routeKey = `${controller.name}:${String(route.propertyKey)}`;
         const routeMiddlewares = [...(httpMetadata.routeMiddlewares.get(routeKey) || [])];
-        const contract = Reflect.getMetadata('kanji:contract', controller.prototype, route.propertyKey);
+        const contract = Reflect.getMetadata(
+          'kanji:contract',
+          controller.prototype,
+          route.propertyKey,
+        );
         const middlewaresToApply = [...controllerMiddlewares];
 
+        const rateLimitOptions = Reflect.getMetadata(
+          'kanji:rate-limit',
+          controller.prototype,
+          route.propertyKey,
+        );
+        if (rateLimitOptions) {
+          const { createRateLimitMiddleware } = await import('./middleware/rate-limit.js');
+          middlewaresToApply.push(createRateLimitMiddleware(rateLimitOptions, routeKey));
+        }
+
         if (contract) {
-          const validator = options.validator ?? new (await import('@kanjijs/contracts')).ZodValidator();
+          const validator =
+            options.validator ?? new (await import('@kanjijs/contracts')).ZodValidator();
           middlewaresToApply.push(validator.validate(contract));
         }
 
@@ -213,7 +235,8 @@ export class KanjijsAdapter {
           return controllerInstance[route.propertyKey](c);
         };
 
-        const method = route.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
+        const method = route.method.toUpperCase() as
+          'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
         app.on(method, [fullPath], ...middlewaresToApply, handler);
 
         if (activeLogger) {
@@ -226,7 +249,9 @@ export class KanjijsAdapter {
     // WebSocket Gateway registration
     // ============================================================
     const gateways = container.getGateways();
-    let websocketHandler: import('hono/bun').BunWebSocketHandler<import('hono/bun').BunWebSocketData> | undefined = undefined;
+    let websocketHandler:
+      import('hono/bun').BunWebSocketHandler<import('hono/bun').BunWebSocketData> | undefined =
+      undefined;
 
     if (gateways.length > 0) {
       const { WsMetadataStorage, WsGatewayHandler } = await import('./gateway/index.js');
@@ -246,7 +271,10 @@ export class KanjijsAdapter {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const instance = await container.resolve(gateway, moduleClass) as Record<string | symbol, (...args: any[]) => unknown>;
+        const instance = (await container.resolve(gateway, moduleClass)) as Record<
+          string | symbol,
+          (...args: any[]) => unknown
+        >;
         const upgradeHandler = wsHandler.createUpgradeHandler(instance, gateway);
 
         // Apply controller-level middlewares (e.g. @UseGuards(AuthGuard)) before upgrade
@@ -259,12 +287,17 @@ export class KanjijsAdapter {
       }
 
       const { websocket } = await import('hono/bun');
-      websocketHandler = websocket as import('hono/bun').BunWebSocketHandler<import('hono/bun').BunWebSocketData>;
+      websocketHandler = websocket as import('hono/bun').BunWebSocketHandler<
+        import('hono/bun').BunWebSocketData
+      >;
     }
 
     if (activeLogger) {
       const duration = performance.now() - bootstrapStart;
-      activeLogger.log(`Kanji application successfully started (+${duration.toFixed(2)}ms)`, 'Kanji');
+      activeLogger.log(
+        `Kanji application successfully started (+${duration.toFixed(2)}ms)`,
+        'Kanji',
+      );
     }
 
     // Track the server instance for graceful shutdown
@@ -298,10 +331,7 @@ export class KanjijsAdapter {
       }
 
       if (activeLogger) {
-        activeLogger.log(
-          `Server listening on http://${hostname ?? 'localhost'}:${port}`,
-          'Kanji',
-        );
+        activeLogger.log(`Server listening on http://${hostname ?? 'localhost'}:${port}`, 'Kanji');
       }
 
       return serverInstance;
@@ -328,5 +358,4 @@ export class KanjijsAdapter {
       ...(websocketHandler ? { websocket: websocketHandler } : {}),
     };
   }
-
 }

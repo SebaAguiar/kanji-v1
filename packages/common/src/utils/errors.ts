@@ -58,3 +58,10 @@ export class ValidationError extends KanjiError {
     this.issues = issues;
   }
 }
+
+export class TooManyRequestsError extends KanjiError {
+  constructor(message: string = 'Too many requests', code: string = 'TOO_MANY_REQUESTS') {
+    super(message, 429, code);
+    this.name = 'TooManyRequestsError';
+  }
+}
