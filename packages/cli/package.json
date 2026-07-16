@@ -17,6 +17,7 @@
     "prompts": "^2.4.2"
   },
   "devDependencies": {
+    "@kanjijs/common": "workspace:*",
     "@kanjijs/openapi": "workspace:*",
     "@types/prompts": "^2.4.9"
   },

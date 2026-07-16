@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-type EnvValue = 
-  | string 
-  | number 
-  | boolean 
-  | null 
-  | undefined 
+type EnvValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
   | Record<string, string | number | boolean | null | undefined>;
 
 const cache = new Map<string, EnvValue>();
@@ -23,8 +23,8 @@ export function env<T extends z.ZodTypeAny>(key: string, schema: T): z.infer<T> 
 
   const result = schema.safeParse(process.env[key]);
   if (!result.success) {
-    errors.push(`${key}: ${result.error.issues.map(i => i.message).join(', ')}`);
-    return undefined as z.infer<T>; 
+    errors.push(`${key}: ${result.error.issues.map((i) => i.message).join(', ')}`);
+    return undefined as z.infer<T>;
   }
 
   cache.set(key, result.data as EnvValue);
@@ -33,7 +33,7 @@ export function env<T extends z.ZodTypeAny>(key: string, schema: T): z.infer<T> 
 
 export function assertEnvValid(): void {
   if (errors.length > 0) {
-    throw new Error(`❌ Invalid environment:\n${errors.map(e => `  - ${e}`).join('\n')}`);
+    throw new Error(`❌ Invalid environment:\n${errors.map((e) => `  - ${e}`).join('\n')}`);
   }
 }
 

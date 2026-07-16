@@ -10,6 +10,7 @@ import { registerBuildCommand } from './commands/build.js';
 import { registerOpenApiCommand } from './commands/openapi.js';
 import { registerSdkCommand } from './commands/sdk.js';
 import { registerAuthCommand } from './commands/auth.js';
+import { registerEnvCommand } from './commands/env.js';
 
 const program = new Command();
 
@@ -28,6 +29,7 @@ registerBuildCommand(program);
 registerOpenApiCommand(program);
 registerSdkCommand(program);
 registerAuthCommand(program);
+registerEnvCommand(program);
 
 if (import.meta.main) {
   program.parse(process.argv);
