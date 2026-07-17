@@ -59,6 +59,9 @@ jobs:
           NEW_VERSION=$(node -e "console.log(require('./packages/common/package.json').version)")
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Update lockfile
+        run: pnpm install --no-frozen-lockfile
+
       - name: Build
         run: pnpm build
 
