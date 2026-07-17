@@ -2,6 +2,9 @@
   "name": "@kanjijs/platform-hono",
   "version": "1.0.0-alpha.1",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "types": "./dist/index.d.ts",
   "type": "module",
   "scripts": {
@@ -16,8 +19,8 @@
     "reflect-metadata": "0.2.2"
   },
   "peerDependencies": {
-    "@kanjijs/auth": "workspace:*",
-    "@kanjijs/contracts": "workspace:*",
+    "@kanjijs/auth": "^1.0.0-alpha.1",
+    "@kanjijs/contracts": "^1.0.0-alpha.1",
     "typescript": "6.0.3"
   }
 }

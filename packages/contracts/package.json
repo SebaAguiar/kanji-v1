@@ -2,6 +2,9 @@
   "name": "@kanjijs/contracts",
   "version": "1.0.0-alpha.1",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "types": "./dist/index.d.ts",
   "type": "module",
   "scripts": {

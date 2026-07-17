@@ -2,6 +2,9 @@
   "name": "@kanjijs/store",
   "version": "1.0.0-alpha.1",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "types": "./dist/index.d.ts",
   "type": "module",
   "scripts": {
@@ -16,7 +19,7 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "@kanjijs/core": "workspace:*",
+    "@kanjijs/core": "^1.0.0-alpha.1",
     "typescript": "6.0.3"
   }
 }

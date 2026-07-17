@@ -2,6 +2,9 @@
   "name": "@kanjijs/cli",
   "version": "1.0.0-alpha.1",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "types": "./dist/index.d.ts",
   "type": "module",
   "bin": {
@@ -9,7 +12,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "bun test"
   },
   "dependencies": {
     "commander": "^15.0.0",

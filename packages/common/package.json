@@ -2,11 +2,15 @@
   "name": "@kanjijs/common",
   "version": "1.0.0-alpha.1",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "types": "./dist/index.d.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "bun test"
   },
   "dependencies": {
     "zod": "^3.24.1"
