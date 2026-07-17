@@ -30,7 +30,8 @@ export function getGitHubActionsTemplate(opts: ProjectOptions): string {
   if (opts.lint !== false) {
     lintStep = `
       - name: Run lint
-        run: ${runCmd} lint || echo "No lint script/command defined"`;
+        continue-on-error: true
+        run: ${runCmd} lint`;
   }
 
   let buildStep = '';

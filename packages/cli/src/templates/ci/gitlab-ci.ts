@@ -29,9 +29,9 @@ test:
     lintJob = `
 lint:
   stage: lint
+  allow_failure: true
   script:
-    - ${runCmd} lint || echo "No lint script/command defined"
-`;
+    - ${runCmd} lint`;
   }
 
   let buildJob = '';

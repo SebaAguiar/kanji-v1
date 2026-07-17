@@ -255,7 +255,7 @@ export function registerCheckCommand(program: Command) {
       for (const file of tsFiles) {
         try {
           const content = await readFile(file, 'utf-8');
-          const envMatches = content.matchAll(/\bprocess\.env\.([A-Z0-9_]+)\b/g);
+          const envMatches = content.matchAll(/\bprocess\.env\.([A-Za-z0-9_]+)\b/g);
           for (const match of envMatches) {
             envVariables.add(match[1]);
           }
