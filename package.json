@@ -6,8 +6,8 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
-    "test": "bun test",
-    "test:ci": "bun test",
+    "test": "rm -rf examples/*/dist && bun test",
+    "test:ci": "rm -rf examples/*/dist && bun test",
     "lint": "eslint \"packages/**/src/**/*.ts\" \"examples/**/src/**/*.ts\"",
     "format": "prettier --write \"packages/**/*.ts\" \"examples/**/*.ts\"",
     "format:check": "prettier --check \"packages/**/*.ts\" \"examples/**/*.ts\"",
