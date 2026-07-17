@@ -21,8 +21,8 @@
     "@kanjijs/store": "workspace:*"
   },
   "peerDependencies": {
-    "@kanjijs/core": "^1.0.0-alpha.1",
-    "@kanjijs/platform-hono": "^1.0.0-alpha.1",
+    "@kanjijs/core": "workspace:*",
+    "@kanjijs/platform-hono": "workspace:*",
     "hono": "^4.0.0",
     "typescript": "6.0.3"
   }
