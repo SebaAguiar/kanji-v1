@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { join } from 'path';
-import { mkdir, writeFile } from 'fs/promises';
+import { join, resolve } from 'path';
+import { mkdir, writeFile, readdir, readFile, stat } from 'fs/promises';
 import prompts from 'prompts';
 import { execSync } from 'child_process';
 import { printNextSteps } from '../utils/next-steps.js';
@@ -34,6 +34,60 @@ interface CliNewOptions {
   tests?: boolean;
   pm?: string;
   install: boolean;
+  template?: string;
+}
+
+async function copyTemplate(srcDir: string, destDir: string, version: string) {
+  const entries = await readdir(srcDir);
+
+  for (const entry of entries) {
+    if (entry === 'node_modules' || entry === 'dist' || entry === '.env') {
+      continue;
+    }
+
+    const srcPath = join(srcDir, entry);
+    const destPath = join(destDir, entry);
+    const s = await stat(srcPath);
+
+    if (s.isDirectory()) {
+      await mkdir(destPath, { recursive: true });
+      await copyTemplate(srcPath, destPath, version);
+    } else {
+      if (entry === 'package.json') {
+        const content = await readFile(srcPath, 'utf-8');
+        const pkg = JSON.parse(content);
+
+        // Rename package to match target app name
+        pkg.name = destDir.split('/').pop() || pkg.name;
+
+        const updateDeps = (deps?: Record<string, string>) => {
+          if (!deps) return;
+          for (const key of Object.keys(deps)) {
+            if (key.startsWith('@kanjijs/') && deps[key] === 'workspace:*') {
+              deps[key] = `^${version}`;
+            }
+          }
+        };
+
+        updateDeps(pkg.dependencies);
+        updateDeps(pkg.devDependencies);
+        updateDeps(pkg.peerDependencies);
+
+        await writeFile(destPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+      } else if (entry === 'tsconfig.json') {
+        const tsconfig = getTsConfigTemplate();
+        await writeFile(destPath, JSON.stringify(tsconfig, null, 2) + '\n', 'utf-8');
+      } else if (entry === '.env.example') {
+        const content = await readFile(srcPath, 'utf-8');
+        await writeFile(destPath, content, 'utf-8');
+        // Also write active .env
+        await writeFile(join(destDir, '.env'), content, 'utf-8');
+      } else {
+        const content = await readFile(srcPath);
+        await writeFile(destPath, content);
+      }
+    }
+  }
 }
 
 export function registerNewCommand(program: Command) {
@@ -49,6 +103,7 @@ export function registerNewCommand(program: Command) {
     .option('--tests', 'Generate test suite')
     .option('--pm <manager>', 'Package manager to use (bun, npm, pnpm)')
     .option('--no-install', 'Do not run package manager install automatically')
+    .option('-t, --template <name>', 'Template to initialize (starter, basic, saas-starter)')
     .action(async (nameArg: string | undefined, options: CliNewOptions) => {
       const isInteractive =
         !options.minimal &&
@@ -58,7 +113,8 @@ export function registerNewCommand(program: Command) {
         options.docker === undefined &&
         !options.ci &&
         options.tests === undefined &&
-        !options.pm;
+        !options.pm &&
+        !options.template;
 
       let appName = nameArg;
       let pm = options.pm as PackageManager | undefined;
@@ -68,9 +124,28 @@ export function registerNewCommand(program: Command) {
       let docker = options.docker;
       let ci = options.ci as CiPlatform | undefined;
       let tests = options.tests;
+      let template: string | undefined = options.template;
 
       if (isInteractive) {
         console.log(pc.cyan('Welcome to the Kanji Framework installer! 🚀\n'));
+
+        const resUseTemplate = await prompts({
+          type: 'select',
+          name: 'useTemplate',
+          message: 'Initialize project from a template?',
+          choices: [
+            { title: 'None (Scaffold custom project)', value: 'none' },
+            { title: 'Starter (Minimal blank API)', value: 'starter' },
+            { title: 'Basic (CRUD with PostgreSQL & Drizzle)', value: 'basic' },
+            { title: 'SaaS Starter (Multi-tenant with auth, teams, policies & E2E tests)', value: 'saas-starter' },
+          ],
+        });
+
+        if (resUseTemplate.useTemplate === undefined) process.exit(0);
+
+        if (resUseTemplate.useTemplate !== 'none') {
+          template = resUseTemplate.useTemplate;
+        }
 
         if (!appName) {
           const res = await prompts({
@@ -97,68 +172,70 @@ export function registerNewCommand(program: Command) {
         pm = resPm.pm;
         if (!pm) process.exit(0);
 
-        const resDb = await prompts({
-          type: 'select',
-          name: 'db',
-          message: 'Database:',
-          choices: [
-            { title: 'PostgreSQL (Drizzle ORM)', value: 'postgres' },
-            { title: 'MongoDB (Native adapter)', value: 'mongodb' },
-            { title: 'None', value: 'none' },
-          ],
-        });
-        db = resDb.db;
-        if (!db) process.exit(0);
+        if (!template) {
+          const resDb = await prompts({
+            type: 'select',
+            name: 'db',
+            message: 'Database:',
+            choices: [
+              { title: 'PostgreSQL (Drizzle ORM)', value: 'postgres' },
+              { title: 'MongoDB (Native adapter)', value: 'mongodb' },
+              { title: 'None', value: 'none' },
+            ],
+          });
+          db = resDb.db;
+          if (!db) process.exit(0);
 
-        const resAuth = await prompts({
-          type: 'multiselect',
-          name: 'auth',
-          message: 'Auth providers:',
-          choices: [
-            { title: 'JWT (Local login/refresh)', value: 'jwt' },
-            { title: 'Google (OAuth)', value: 'google' },
-            { title: 'GitHub (OAuth)', value: 'github' },
-            { title: 'Microsoft (OAuth)', value: 'microsoft' },
-          ],
-        });
-        auth = resAuth.auth || [];
+          const resAuth = await prompts({
+            type: 'multiselect',
+            name: 'auth',
+            message: 'Auth providers:',
+            choices: [
+              { title: 'JWT (Local login/refresh)', value: 'jwt' },
+              { title: 'Google (OAuth)', value: 'google' },
+              { title: 'GitHub (OAuth)', value: 'github' },
+              { title: 'Microsoft (OAuth)', value: 'microsoft' },
+            ],
+          });
+          auth = resAuth.auth || [];
 
-        const resOpenapi = await prompts({
-          type: 'confirm',
-          name: 'openapi',
-          message: 'Enable OpenAPI documentation?',
-          initial: true,
-        });
-        openapi = resOpenapi.openapi;
+          const resOpenapi = await prompts({
+            type: 'confirm',
+            name: 'openapi',
+            message: 'Enable OpenAPI documentation?',
+            initial: true,
+          });
+          openapi = resOpenapi.openapi;
 
-        const resDocker = await prompts({
-          type: 'confirm',
-          name: 'docker',
-          message: 'Generate Docker Compose file?',
-          initial: true,
-        });
-        docker = resDocker.docker;
+          const resDocker = await prompts({
+            type: 'confirm',
+            name: 'docker',
+            message: 'Generate Docker Compose file?',
+            initial: true,
+          });
+          docker = resDocker.docker;
 
-        const resCi = await prompts({
-          type: 'select',
-          name: 'ci',
-          message: 'CI/CD pipeline:',
-          choices: [
-            { title: 'GitHub Actions', value: 'github' },
-            { title: 'GitLab CI', value: 'gitlab' },
-            { title: 'None', value: 'none' },
-          ],
-        });
-        ci = resCi.ci;
-        if (!ci) process.exit(0);
+          const resCi = await prompts({
+            type: 'select',
+            name: 'ci',
+            message: 'CI/CD pipeline:',
+            choices: [
+              { title: 'GitHub Actions', value: 'github' },
+              { title: 'GitLab CI', value: 'gitlab' },
+              { title: 'None', value: 'none' },
+            ],
+          });
+          ci = resCi.ci;
+          if (!ci) process.exit(0);
 
-        const resTests = await prompts({
-          type: 'confirm',
-          name: 'tests',
-          message: 'Generate example tests?',
-          initial: true,
-        });
-        tests = resTests.tests;
+          const resTests = await prompts({
+            type: 'confirm',
+            name: 'tests',
+            message: 'Generate example tests?',
+            initial: true,
+          });
+          tests = resTests.tests;
+        }
       } else {
         appName = nameArg || 'my-api';
         pm = (options.pm || 'bun') as PackageManager;
@@ -172,6 +249,69 @@ export function registerNewCommand(program: Command) {
         tests = options.tests ?? false;
       }
 
+      const targetDir = join(process.cwd(), appName);
+
+      // Handle template creation
+      if (template) {
+        if (template !== 'starter' && template !== 'basic' && template !== 'saas-starter') {
+          console.error(pc.red(`Error: Invalid template name "${template}". Valid values are: starter, basic, saas-starter.`));
+          process.exit(1);
+        }
+
+        console.log(pc.cyan(`\nCreating a new Kanji project from template "${template}" in ${targetDir}...`));
+
+        try {
+          // Resolve examples path relative to import.meta.dirname
+          const examplesDir = resolve(import.meta.dirname, '..', '..', '..', '..', 'examples');
+          const templateSrcDir = join(examplesDir, template);
+
+          // Get dynamic version from packages/common/package.json
+          const commonPkgPath = resolve(examplesDir, '..', 'packages', 'common', 'package.json');
+          let version = '1.0.0-alpha.1';
+          try {
+            const commonPkg = JSON.parse(await readFile(commonPkgPath, 'utf-8'));
+            version = commonPkg.version;
+          } catch {
+            // fallback
+          }
+
+          await mkdir(targetDir, { recursive: true });
+          await copyTemplate(templateSrcDir, targetDir, version);
+
+          console.log(pc.bold(pc.green(`\nKanji project "${appName}" successfully created from template! 🚀`)));
+
+          // Git init & Install dependencies
+          if (options.install !== false) {
+            try {
+              console.log(pc.cyan('\nInitializing Git repository...'));
+              execSync('git init', { cwd: targetDir, stdio: 'ignore' });
+            } catch {
+              console.warn(pc.yellow('Warning: Could not initialize git repository automatically.'));
+            }
+
+            try {
+              const installCmd = pm === 'bun' ? 'bun install' : `${pm} install`;
+              console.log(pc.cyan(`Running ${installCmd} in project root...`));
+              execSync(installCmd, { cwd: targetDir, stdio: 'inherit' });
+            } catch {
+              console.warn(pc.yellow('Warning: Could not install dependencies automatically.'));
+            }
+          }
+
+          printNextSteps('project', appName, {
+            pm,
+            db: template === 'starter' ? 'none' : 'postgres',
+          });
+
+          return;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error(pc.red(`Error creating project from template: ${msg}`));
+          process.exit(1);
+        }
+      }
+
+      // Handle custom scaffolding (original code)
       const projOpts: ProjectOptions = {
         appName,
         db,
@@ -183,7 +323,6 @@ export function registerNewCommand(program: Command) {
         pm,
       };
 
-      const targetDir = join(process.cwd(), appName);
       console.log(pc.cyan(`\nCreating a new Kanji project in ${targetDir}...`));
 
       try {

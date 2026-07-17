@@ -38,3 +38,5 @@ export interface CheckResult {
   fixable?: boolean;
 }
 
+export type TemplateName = 'starter' | 'basic' | 'saas-starter';
+
