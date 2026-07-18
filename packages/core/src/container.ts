@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import { MetadataStorage } from './metadata-storage';
-import type { Token, Constructor, Provider } from './types';
+import { MetadataStorage } from './metadata-storage.js';
+import type { Token, Constructor, Provider } from './types.js';
 import { KanjiLogger, DefaultConsoleLogger, LOGGER } from '@kanjijs/common';
 
 export class Container {

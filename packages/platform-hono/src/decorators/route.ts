@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { HttpMetadataStorage, type HttpMethod } from '../http-metadata-storage';
+import { HttpMetadataStorage, type HttpMethod } from '../http-metadata-storage.js';
 import { captureLocation } from '@kanjijs/contracts';
 
 function createRouteDecorator(method: HttpMethod) {

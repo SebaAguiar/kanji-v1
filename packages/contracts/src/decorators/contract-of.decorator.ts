@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import type { KanjiContract } from '../types';
+import type { KanjiContract } from '../types.js';
 
 export function ContractOf(contracts: Record<string, KanjiContract>): ClassDecorator {
   return (target: Function) => {

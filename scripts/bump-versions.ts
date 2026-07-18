@@ -99,6 +99,16 @@ function main(): void {
     console.log(`  ${pkg.json.name}: ${oldVersion} → ${newVersion}`);
   }
 
+  // Also update hardcoded version in packages/cli/src/cli.ts
+  const cliSrc = resolve(ROOT, "packages/cli/src/cli.ts");
+  let cliContent = readFileSync(cliSrc, "utf-8");
+  cliContent = cliContent.replace(
+    /\.version\('[^']+'\)/,
+    `.version('${newVersion}')`,
+  );
+  writeFileSync(cliSrc, cliContent);
+  console.log(`  packages/cli/src/cli.ts: version → ${newVersion}`);
+
   console.log(
     `\nDone. Run \`pnpm install\` to update the lockfile and \`pnpm build\` to verify.`,
   );

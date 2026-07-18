@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { Hono } from 'hono';
-import { clp, acl } from '../guards';
+import { clp, acl } from '../guards.js';
 import { KANJI_CTX } from '@kanjijs/platform-hono';
 
 class DummyModule {}

@@ -1,7 +1,7 @@
 import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
-import { HttpMetadataStorage } from './http-metadata-storage';
-import type { KanjijsAdapterOptions } from './types';
+import { HttpMetadataStorage } from './http-metadata-storage.js';
+import type { KanjijsAdapterOptions } from './types.js';
 import {
   KanjiLogger,
   DefaultConsoleLogger,
@@ -113,6 +113,7 @@ export class KanjijsAdapter {
     const sessionProviderToken = Symbol.for('kanji:session_provider');
     if (container.hasProvider(sessionProviderToken, rootModule)) {
       const sessionProvider = await container.resolve(sessionProviderToken, rootModule);
+      // @ts-expect-error - dynamic import resolved at runtime, peer dep may not be installed yet
       const authModule = (await import('@kanjijs/auth')) as AuthModuleExport;
       app.use('*', authModule.createAuthMiddleware(sessionProvider));
       if (activeLogger) {

@@ -1,5 +1,5 @@
 import type { MongoClient, Db, Document, ObjectId, ClientSession } from 'mongodb';
-import { Database, QueryBuilder, DatabaseValue } from '../types';
+import { Database, QueryBuilder, DatabaseValue } from '../types.js';
 
 let MongoLib: typeof import('mongodb') | null = null;
 

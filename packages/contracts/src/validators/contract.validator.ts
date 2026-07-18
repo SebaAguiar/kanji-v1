@@ -1,7 +1,7 @@
 import 'reflect-metadata';
-import { ValidationSeverity, type ValidationResult } from '../validation';
-import { getRegisteredContractActions } from '../decorators/contract';
-import type { KanjiContract } from '../types';
+import { ValidationSeverity, type ValidationResult } from '../validation.js';
+import { getRegisteredContractActions } from '../decorators/contract.js';
+import type { KanjiContract } from '../types.js';
 
 interface HttpRouteMeta {
   method: string;

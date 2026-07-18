@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import type { KanjiContractUnion } from '../types';
-import { captureLocation } from '../validation';
+import type { KanjiContractUnion } from '../types.js';
+import { captureLocation } from '../validation.js';
 
 export function Contract(schema: KanjiContractUnion): MethodDecorator {
   return (target: object, propertyKey: string | symbol) => {

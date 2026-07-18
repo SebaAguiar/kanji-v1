@@ -472,7 +472,7 @@ export function registerGenerateCommand(program: Command) {
           // Update local index.ts for standalone components
           if (artifactType !== 'resource' && artifactType !== 'module') {
             const indexFilePath = join(targetDir, 'index.ts');
-            const exportLine = `export * from './${singular}.${artifactType}';\n`;
+            const exportLine = `export * from './${singular}.${artifactType}.js';\n`;
             if (await fileExists(indexFilePath)) {
               const indexContent = await readFile(indexFilePath, 'utf-8');
               if (!indexContent.includes(`./${singular}.${artifactType}`)) {

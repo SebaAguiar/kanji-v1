@@ -2,7 +2,7 @@ import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { eq, and, asc, desc, Table } from 'drizzle-orm';
 import { PgTable, PgColumn } from 'drizzle-orm/pg-core';
-import { Database, QueryBuilder, DatabaseValue } from '../types';
+import { Database, QueryBuilder, DatabaseValue } from '../types.js';
 
 export class PostgresQueryBuilder<T = Record<string, DatabaseValue>> implements QueryBuilder<T> {
   private type: 'select' | 'insert' | 'update' | 'delete' = 'select';

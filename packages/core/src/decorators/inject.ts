@@ -1,5 +1,5 @@
-import { MetadataStorage } from '../metadata-storage';
-import type { Token, Constructor } from '../types';
+import { MetadataStorage } from '../metadata-storage.js';
+import type { Token, Constructor } from '../types.js';
 
 export function Inject(token: Token<object>): ParameterDecorator {
   return (target: object, _propertyKey: string | symbol | undefined, parameterIndex: number) => {

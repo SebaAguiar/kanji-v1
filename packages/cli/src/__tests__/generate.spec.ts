@@ -156,7 +156,7 @@ export class AppModule {}
     const indexContent = await Bun.file(
       join(controllerWorkspace, 'src', 'orders', 'index.ts'),
     ).text();
-    expect(indexContent).toContain("export * from './order.controller';");
+    expect(indexContent).toContain("export * from './order.controller.js';");
 
     await rm(controllerWorkspace, { recursive: true, force: true });
   });

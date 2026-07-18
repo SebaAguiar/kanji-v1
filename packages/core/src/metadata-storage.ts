@@ -1,4 +1,4 @@
-import type { ModuleMetadata, Constructor, Token } from './types';
+import type { ModuleMetadata, Constructor, Token } from './types.js';
 
 export interface CustomInjectionMetadata {
   index: number;

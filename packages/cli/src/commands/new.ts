@@ -261,16 +261,16 @@ export function registerNewCommand(program: Command) {
         console.log(pc.cyan(`\nCreating a new Kanji project from template "${template}" in ${targetDir}...`));
 
         try {
-          // Resolve examples path relative to import.meta.dirname
-          const examplesDir = resolve(import.meta.dirname, '..', '..', '..', '..', 'examples');
+          // Resolve examples path: templates/examples/ is bundled inside the CLI package
+          const examplesDir = resolve(import.meta.dirname, '..', '..', 'templates', 'examples');
           const templateSrcDir = join(examplesDir, template);
 
-          // Get dynamic version from packages/common/package.json
-          const commonPkgPath = resolve(examplesDir, '..', 'packages', 'common', 'package.json');
+          // Get version from the CLI's own package.json (always in sync with other packages)
+          const cliPkgPath = resolve(import.meta.dirname, '..', '..', 'package.json');
           let version = '1.0.0-alpha.1';
           try {
-            const commonPkg = JSON.parse(await readFile(commonPkgPath, 'utf-8'));
-            version = commonPkg.version;
+            const cliPkg = JSON.parse(await readFile(cliPkgPath, 'utf-8'));
+            version = cliPkg.version;
           } catch {
             // fallback
           }

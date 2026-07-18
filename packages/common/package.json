@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "bun test"
+    "test": "bun test",
+    "prepublishOnly": "tsc"
   },
   "dependencies": {
     "zod": "^3.24.1"

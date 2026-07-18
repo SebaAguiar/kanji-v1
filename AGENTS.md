@@ -303,6 +303,7 @@ Estas reglas no son sugerencias. Son el contrato de comportamiento del agente:
 
 | Pregunta | Documento | Sección |
 |---|---|---|
+| **Guía completa para construir apps con Kanji** | **`docs/guides/AI-GUIDE.md`** | **Todo el documento (reference para IA)** |
 | ¿Cómo está diseñada la arquitectura en general? | `docs/context/ARCHITECTURE.md` | Executive Summary + Architecture Overview |
 | ¿Cómo funciona el sistema de módulos? | `docs/context/ARCHITECTURE.md` | Tier 1: Module System |
 | ¿Cómo funciona la DI? | `docs/context/ARCHITECTURE.md` | Tier 2: Dependency Injection |

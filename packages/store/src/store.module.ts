@@ -1,7 +1,7 @@
 import { KanjijsModule, DynamicModule } from '@kanjijs/core';
-import { PostgresDatabase } from './adapters/postgres';
-import { MongoDatabase } from './adapters/mongodb';
-import { DATABASE_CLIENT, StoreConfig } from './types';
+import { PostgresDatabase } from './adapters/postgres.js';
+import { MongoDatabase } from './adapters/mongodb.js';
+import { DATABASE_CLIENT, StoreConfig } from './types.js';
 import { Table } from 'drizzle-orm';
 
 @KanjijsModule({

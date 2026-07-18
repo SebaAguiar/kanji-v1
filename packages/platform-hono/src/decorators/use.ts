@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import { HttpMetadataStorage } from '../http-metadata-storage';
+import { HttpMetadataStorage } from '../http-metadata-storage.js';
 
 export function Use(...middlewares: MiddlewareHandler[]): MethodDecorator {
   return (target: object, propertyKey?: string | symbol) => {

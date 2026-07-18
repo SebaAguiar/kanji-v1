@@ -1,4 +1,4 @@
-import { HttpMetadataStorage } from '../http-metadata-storage';
+import { HttpMetadataStorage } from '../http-metadata-storage.js';
 
 export function Controller(path: string = ''): ClassDecorator {
   return (target: Function) => {

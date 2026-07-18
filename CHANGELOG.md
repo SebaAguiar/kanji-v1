@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0-alpha.2 (2026-07-17)
+
+### Features
+
+- **cli**: Add `--template` flag and interactive flow in `kanji new` command
+- **examples**: Add basic starter and saas-starter applications
+
+### Chores
+
+- Bump all packages to 1.0.0-alpha.2
+- Fix test runner configuration
+
 ## 1.0.0-alpha.1 (2026-07-17)
 
 ### Features
