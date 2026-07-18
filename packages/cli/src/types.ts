@@ -22,6 +22,7 @@ export interface ProjectOptions {
   pm?: PackageManager;
   lint?: boolean;
   build?: boolean;
+  version?: string;
 }
 
 export interface WebhookOptions {

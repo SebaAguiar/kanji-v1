@@ -1,11 +1,14 @@
 import { ProjectOptions } from '../types.js';
 
 export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): object {
+  // Use the CLI's version when available, fall back to 'latest'.
+  const versionSpec = opts.version ? `^${opts.version}` : 'latest';
+
   const dependencies: Record<string, string> = {
-    '@kanjijs/core': 'latest',
-    '@kanjijs/platform-hono': 'latest',
-    '@kanjijs/contracts': 'latest',
-    '@kanjijs/cli': 'latest',
+    '@kanjijs/core': versionSpec,
+    '@kanjijs/platform-hono': versionSpec,
+    '@kanjijs/contracts': versionSpec,
+    '@kanjijs/cli': versionSpec,
     hono: '^4.0.0',
     zod: '^3.0.0',
     'reflect-metadata': '^0.2.2',
@@ -16,26 +19,26 @@ export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): o
   };
 
   if (opts.db === 'postgres') {
-    dependencies['@kanjijs/store'] = 'latest';
+    dependencies['@kanjijs/store'] = versionSpec;
     dependencies['drizzle-orm'] = '^0.45.2';
     dependencies['pg'] = '^8.11.3';
     devDependencies['@types/pg'] = '^8.11.2';
     devDependencies['drizzle-kit'] = '^0.30.0';
   } else if (opts.db === 'mongodb') {
-    dependencies['@kanjijs/store'] = 'latest';
+    dependencies['@kanjijs/store'] = versionSpec;
     dependencies['mongodb'] = '^6.0.0';
   }
 
   if (opts.auth && opts.auth.length > 0) {
-    dependencies['@kanjijs/auth'] = 'latest';
+    dependencies['@kanjijs/auth'] = versionSpec;
   }
 
   if (opts.openapi) {
-    dependencies['@kanjijs/openapi'] = 'latest';
+    dependencies['@kanjijs/openapi'] = versionSpec;
   }
 
   if (opts.tests) {
-    devDependencies['@kanjijs/testing'] = 'latest';
+    devDependencies['@kanjijs/testing'] = versionSpec;
   }
 
   const scripts: Record<string, string> = {

@@ -312,6 +312,16 @@ export function registerNewCommand(program: Command) {
       }
 
       // Handle custom scaffolding (original code)
+      // Read the CLI's own version for generated package.json
+      const cliPkgPath = resolve(import.meta.dirname, '..', '..', 'package.json');
+      let cliVersion: string | undefined;
+      try {
+        const cliPkg = JSON.parse(await readFile(cliPkgPath, 'utf-8'));
+        cliVersion = cliPkg.version;
+      } catch {
+        // fallback — version is undefined
+      }
+
       const projOpts: ProjectOptions = {
         appName,
         db,
@@ -321,6 +331,7 @@ export function registerNewCommand(program: Command) {
         ci,
         tests,
         pm,
+        version: cliVersion,
       };
 
       console.log(pc.cyan(`\nCreating a new Kanji project in ${targetDir}...`));

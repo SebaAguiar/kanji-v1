@@ -238,16 +238,15 @@ importers:
 
   packages/core:
     dependencies:
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../common
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
       typescript:
         specifier: 6.0.3
         version: 6.0.3
-    devDependencies:
-      '@kanjijs/common':
-        specifier: workspace:*
-        version: link:../common
 
   packages/openapi:
     dependencies:
@@ -279,9 +278,15 @@ importers:
       '@kanjijs/auth':
         specifier: workspace:*
         version: link:../auth
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../common
       '@kanjijs/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@kanjijs/core':
+        specifier: workspace:*
+        version: link:../core
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -289,12 +294,6 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
-      '@kanjijs/common':
-        specifier: workspace:*
-        version: link:../common
-      '@kanjijs/core':
-        specifier: workspace:*
-        version: link:../core
       hono:
         specifier: 4.12.27
         version: 4.12.27
