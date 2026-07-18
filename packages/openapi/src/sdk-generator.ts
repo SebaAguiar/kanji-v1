@@ -118,7 +118,11 @@ export class SdkGenerator {
         if (op.requestBody?.content?.['application/json']?.schema) {
           const bodyInterfaceName = `${opCapitalized}Body`;
           const bodySchema = op.requestBody.content['application/json'].schema;
-          interfaces.push(`export interface ${bodyInterfaceName} ${schemaToTs(bodySchema)}`);
+          if (bodySchema.type === 'array') {
+            interfaces.push(`export type ${bodyInterfaceName} = ${schemaToTs(bodySchema)};`);
+          } else {
+            interfaces.push(`export interface ${bodyInterfaceName} ${schemaToTs(bodySchema)}`);
+          }
           bodyType = bodyInterfaceName;
         }
 
@@ -153,7 +157,11 @@ export class SdkGenerator {
           if (resp.content?.['application/json']?.schema) {
             const respInterfaceName = `${opCapitalized}Response`;
             const respSchema = resp.content['application/json'].schema;
-            interfaces.push(`export interface ${respInterfaceName} ${schemaToTs(respSchema)}`);
+            if (respSchema.type === 'array') {
+              interfaces.push(`export type ${respInterfaceName} = ${schemaToTs(respSchema)};`);
+            } else {
+              interfaces.push(`export interface ${respInterfaceName} ${schemaToTs(respSchema)}`);
+            }
             successResponseInterface = respInterfaceName;
           } else {
             successResponseInterface = 'null';
