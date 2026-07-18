@@ -11,6 +11,7 @@ import { registerBuildCommand } from './commands/build.js';
 import { registerStartCommand } from './commands/start.js';
 import { registerOpenApiCommand } from './commands/openapi.js';
 import { registerSdkCommand } from './commands/sdk.js';
+import { registerOpenApiServeCommand } from './commands/openapi-serve.js';
 import { registerAuthCommand } from './commands/auth.js';
 import { registerEnvCommand } from './commands/env.js';
 import { registerCheckCommand } from './commands/check.js';
@@ -21,7 +22,7 @@ const program = new Command();
 program
   .name('kanji')
   .description('Kanji Framework CLI for rapid backend development')
-  .version('1.0.0-alpha.19');
+  .version('1.0.0-alpha.20');
 
 registerNewCommand(program);
 registerGenerateCommand(program);
@@ -34,6 +35,7 @@ registerBuildCommand(program);
 registerStartCommand(program);
 registerOpenApiCommand(program);
 registerSdkCommand(program);
+registerOpenApiServeCommand(program);
 registerAuthCommand(program);
 registerEnvCommand(program);
 registerCheckCommand(program);
