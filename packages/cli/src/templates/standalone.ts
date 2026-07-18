@@ -53,3 +53,16 @@ export class ${singularCapitalized}Repository {
 }
 `;
 };
+
+export const getStandaloneGatewayTemplate = (name: string): string => {
+  const singular = toSingular(name);
+  const singularCapitalized = capitalize(singular);
+  return `import { WebSocketGateway } from '@kanjijs/platform-hono';
+
+@WebSocketGateway('/${name.toLowerCase()}')
+export class ${singularCapitalized}Gateway {
+  // constructor() {}
+}
+`;
+};
+

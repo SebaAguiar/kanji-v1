@@ -1,5 +1,5 @@
 export function isValidArtifactType(type: string): boolean {
-  const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository', 'auth', 'webhook'];
+  const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository', 'auth', 'webhook', 'gateway'];
   return allowedTypes.includes(type.toLowerCase().trim());
 }
 

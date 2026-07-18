@@ -21,6 +21,7 @@ import {
   getStandaloneServiceTemplate,
   getStandaloneRepositoryTemplate,
 } from '../templates/standalone.js';
+import { getGatewayTemplate } from '../templates/gateway.js';
 import { runAuthSetup } from './auth.js';
 import { getAuthModuleTemplate } from '../templates/auth-endpoints.js';
 import { getWebhookTemplate } from '../templates/webhook.js';
@@ -38,7 +39,7 @@ export function registerGenerateCommand(program: Command) {
     .alias('generate')
     .argument(
       '[type]',
-      'Type of artifact to generate (resource, module, controller, service, repository, auth, webhook)',
+      'Type of artifact to generate (resource, module, controller, service, repository, auth, webhook, gateway)',
     )
     .argument('[name]', 'Name of the artifact')
     .option('--dry-run', 'Preview changes without writing to disk', false)
@@ -65,6 +66,7 @@ export function registerGenerateCommand(program: Command) {
               { title: 'Controller (HTTP Handlers)', value: 'controller' },
               { title: 'Service (Business Logic)', value: 'service' },
               { title: 'Repository (Data Access)', value: 'repository' },
+              { title: 'Gateway (WebSocket Gateway)', value: 'gateway' },
               { title: 'Auth (Module/Policies)', value: 'auth' },
               { title: 'Webhook (Handler/Module)', value: 'webhook' },
             ],
@@ -74,7 +76,7 @@ export function registerGenerateCommand(program: Command) {
         }
 
         if (!isValidArtifactType(artifactType)) {
-          const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository', 'auth', 'webhook'];
+          const allowedTypes = ['resource', 'module', 'controller', 'service', 'repository', 'auth', 'webhook', 'gateway'];
           console.error(
             pc.red(
               `Error: Generating type "${artifactType}" is not supported. Use: ${allowedTypes.join(', ')}.`,
@@ -450,6 +452,21 @@ export function registerGenerateCommand(program: Command) {
               content: getStandaloneRepositoryTemplate(normalizedName),
             },
           ];
+        } else if (artifactType === 'gateway') {
+          files = [
+            {
+              path: `${singular}.gateway.ts`,
+              content: getGatewayTemplate(normalizedName),
+            },
+          ];
+
+          const localModulePath = join(targetDir, `${singular}.module.ts`);
+          if (!(await fileExists(localModulePath))) {
+            files.push({
+              path: `${singular}.module.ts`,
+              content: getStandaloneModuleTemplate(normalizedName),
+            });
+          }
         }
 
         if (options.dryRun) {
@@ -512,20 +529,23 @@ export function registerGenerateCommand(program: Command) {
             }
           }
 
-          // Auto-register in local module for controller, service, and repository
+          // Auto-register in local module for controller, service, repository, and gateway
           if (
             artifactType === 'controller' ||
             artifactType === 'service' ||
-            artifactType === 'repository'
+            artifactType === 'repository' ||
+            artifactType === 'gateway'
           ) {
             const localModulePath = join(targetDir, `${singular}.module.ts`);
             if (await fileExists(localModulePath)) {
               const className = `${capitalize(singular)}${capitalize(artifactType)}`;
               const importPath = `./${singular}.${artifactType}.js`;
 
-              let arrayName: 'controllers' | 'providers' | 'exports' = 'providers';
+              let arrayName: 'controllers' | 'providers' | 'exports' | 'gateways' = 'providers';
               if (artifactType === 'controller') {
                 arrayName = 'controllers';
+              } else if (artifactType === 'gateway') {
+                arrayName = 'gateways';
               }
 
               try {

@@ -107,7 +107,7 @@ export function updateLocalModule(
   fileContent: string,
   className: string,
   importPath: string,
-  arrayName: 'controllers' | 'providers' | 'exports',
+  arrayName: 'controllers' | 'providers' | 'exports' | 'gateways',
 ): string {
   let updatedContent = fileContent;
   const importStatement = `import { ${className} } from '${importPath}';\n`;
