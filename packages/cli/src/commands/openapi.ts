@@ -14,7 +14,8 @@ export function registerOpenApiCommand(program: Command) {
       'src/main.ts',
     )
     .option('--output <output>', 'Path to write the generated JSON spec', 'openapi.json')
-    .action(async (options: { entry: string; output: string }) => {
+    .option('--check', 'Validate generated OpenAPI specification against disk without writing', false)
+    .action(async (options: { entry: string; output: string; check: boolean }) => {
       const entryPath = join(process.cwd(), options.entry);
       const outputPath = join(process.cwd(), options.output);
 
@@ -36,11 +37,31 @@ export function registerOpenApiCommand(program: Command) {
           }
         } catch {}
 
+        // Load the application to register all decorators and routes in metadata storage
+        await import(entryPath);
+
         const { OpenApiGenerator } = await import('@kanjijs/openapi');
         const generator = new OpenApiGenerator({
           title: pkg.name ?? 'Kanji API',
           version: pkg.version ?? '1.0.0',
         });
+
+        if (options.check) {
+          console.log(pc.cyan('Validating generated OpenAPI spec against disk...'));
+          const spec = generator.generateSpec();
+          if (!(await fileExists(outputPath))) {
+            console.error(pc.red(`Error: OpenAPI spec file not found at ${options.output}`));
+            process.exit(1);
+          }
+          const existingSpec = JSON.parse(await readFile(outputPath, 'utf-8'));
+          if (JSON.stringify(spec) !== JSON.stringify(existingSpec)) {
+            console.error(pc.red('Error: OpenAPI specification in disk is out of date.'));
+            console.error(pc.yellow(`Please run "kanji openapi:generate" to update it.`));
+            process.exit(1);
+          }
+          console.log(pc.bold(pc.green('OpenAPI spec is valid and matches disk content! ✔')));
+          return;
+        }
 
         console.log(pc.cyan('Generating OpenAPI specification...'));
         await generator.generateToFile(outputPath);
