@@ -21,7 +21,7 @@ const program = new Command();
 program
   .name('kanji')
   .description('Kanji Framework CLI for rapid backend development')
-  .version('1.0.0-alpha.18');
+  .version('1.0.0-alpha.19');
 
 registerNewCommand(program);
 registerGenerateCommand(program);
