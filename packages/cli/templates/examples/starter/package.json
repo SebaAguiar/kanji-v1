@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "kanji dev",
     "build": "kanji build",
-    "start": "bun src/main.ts"
+    "start": "kanji start"
   },
   "dependencies": {
     "@kanjijs/core": "workspace:*",

@@ -1,9 +1,6 @@
 import { ProjectOptions } from '../types.js';
 
 export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): object {
-  const pm = opts.pm || 'bun';
-  const startScript = pm === 'bun' ? 'bun src/main.ts' : 'node dist/main.js';
-
   const dependencies: Record<string, string> = {
     '@kanjijs/core': 'latest',
     '@kanjijs/platform-hono': 'latest',
@@ -44,15 +41,17 @@ export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): o
   const scripts: Record<string, string> = {
     dev: 'kanji dev',
     build: 'kanji build',
-    start: startScript,
+    start: 'kanji start',
   };
 
   if (opts.db === 'postgres') {
-    scripts['db:push'] = 'drizzle-kit push';
-    scripts['db:migrate'] = 'drizzle-kit migrate';
-    scripts['db:generate'] = 'drizzle-kit generate';
-    scripts['db:studio'] = 'drizzle-kit studio';
+    scripts['db:push'] = 'kanji db:push';
+    scripts['db:migrate'] = 'kanji migrate';
+    scripts['db:generate'] = 'kanji migrate:create';
+    scripts['db:studio'] = 'kanji db:studio';
   }
+
+  const pm = opts.pm || 'bun';
 
   if (opts.tests) {
     scripts['test'] = pm === 'bun' ? 'bun test' : 'vitest run';

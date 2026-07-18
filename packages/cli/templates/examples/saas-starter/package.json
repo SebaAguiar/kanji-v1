@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "kanji dev",
     "build": "kanji build",
-    "start": "bun src/main.ts",
-    "db:push": "drizzle-kit push",
-    "db:migrate": "drizzle-kit migrate",
-    "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "start": "kanji start",
+    "db:push": "kanji db:push",
+    "db:migrate": "kanji migrate",
+    "db:generate": "kanji migrate:create",
+    "db:studio": "kanji db:studio"
   },
   "dependencies": {
     "@kanjijs/core": "workspace:*",
