@@ -1,6 +1,6 @@
 {
   "name": "@kanjijs/contracts",
-  "version": "1.0.0-alpha.15",
+  "version": "1.0.0-alpha.16",
   "main": "./dist/index.js",
   "files": [
     "dist"
