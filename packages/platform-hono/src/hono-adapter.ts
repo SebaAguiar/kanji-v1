@@ -113,7 +113,6 @@ export class KanjijsAdapter {
     const sessionProviderToken = Symbol.for('kanji:session_provider');
     if (container.hasProvider(sessionProviderToken, rootModule)) {
       const sessionProvider = await container.resolve(sessionProviderToken, rootModule);
-      // @ts-expect-error - dynamic import resolved at runtime, peer dep may not be installed yet
       const authModule = (await import('@kanjijs/auth')) as AuthModuleExport;
       app.use('*', authModule.createAuthMiddleware(sessionProvider));
       if (activeLogger) {
