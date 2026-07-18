@@ -1,6 +1,6 @@
 {
   "name": "@kanjijs/testing",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "main": "./dist/index.js",
   "files": [
     "dist"
@@ -24,7 +24,13 @@
   "peerDependencies": {
     "@kanjijs/core": "workspace:*",
     "@kanjijs/platform-hono": "workspace:*",
+    "@kanjijs/store": "workspace:*",
     "hono": "^4.0.0",
     "typescript": "6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "@kanjijs/store": {
+      "optional": true
+    }
   }
 }
