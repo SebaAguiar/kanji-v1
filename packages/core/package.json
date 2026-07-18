@@ -1,6 +1,6 @@
 {
   "name": "@kanjijs/core",
-  "version": "1.0.0-alpha.10",
+  "version": "1.0.0-alpha.11",
   "main": "./dist/index.js",
   "files": [
     "dist"
@@ -14,10 +14,13 @@
     "prepublishOnly": "tsc"
   },
   "dependencies": {
-    "@kanjijs/common": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
+    "@kanjijs/common": "workspace:*",
     "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@kanjijs/common": "workspace:*"
   }
 }
