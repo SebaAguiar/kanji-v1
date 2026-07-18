@@ -1,6 +1,6 @@
 {
   "name": "@kanjijs/store",
-  "version": "1.0.0-alpha.8",
+  "version": "1.0.0-alpha.9",
   "main": "./dist/index.js",
   "files": [
     "dist"
