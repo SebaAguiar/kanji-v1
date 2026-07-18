@@ -389,9 +389,9 @@ export function registerNewCommand(program: Command) {
           const drizzleConfig = getDrizzleConfigTemplate();
           await writeFile(join(targetDir, 'drizzle.config.ts'), drizzleConfig, 'utf-8');
 
-          await mkdir(join(targetDir, 'src', 'db', 'schema'), { recursive: true });
-          await writeFile(join(targetDir, 'src', 'db', 'schema', 'index.ts'), getDbSchemaTemplate(), 'utf-8');
-          await writeFile(join(targetDir, 'src', 'db', 'seed.ts'), getDbSeedTemplate(), 'utf-8');
+          await mkdir(join(targetDir, 'src', 'database', 'schema'), { recursive: true });
+          await writeFile(join(targetDir, 'src', 'database', 'schema', 'index.ts'), getDbSchemaTemplate(), 'utf-8');
+          await writeFile(join(targetDir, 'src', 'database', 'seed.ts'), getDbSeedTemplate(), 'utf-8');
         }
 
         // Conditionally generate Auth
