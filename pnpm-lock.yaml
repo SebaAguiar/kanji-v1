@@ -165,7 +165,7 @@ importers:
   packages/auth:
     dependencies:
       hono:
-        specifier: ^4.0.0
+        specifier: ^4.12.27
         version: 4.12.27
       jsonwebtoken:
         specifier: ^9.0.3
@@ -224,7 +224,7 @@ importers:
   packages/contracts:
     dependencies:
       hono:
-        specifier: 4.12.27
+        specifier: ^4.12.27
         version: 4.12.27
       reflect-metadata:
         specifier: 0.2.2
@@ -270,7 +270,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       hono:
-        specifier: 4.12.27
+        specifier: ^4.12.27
         version: 4.12.27
 
   packages/platform-hono:
@@ -295,7 +295,7 @@ importers:
         version: 6.0.3
     devDependencies:
       hono:
-        specifier: 4.12.27
+        specifier: ^4.12.27
         version: 4.12.27
 
   packages/store:
@@ -328,7 +328,7 @@ importers:
         specifier: workspace:*
         version: link:../platform-hono
       hono:
-        specifier: ^4.0.0
+        specifier: ^4.12.27
         version: 4.12.27
       jsonwebtoken:
         specifier: ^9.0.3

@@ -1,6 +1,6 @@
 {
   "name": "@kanjijs/platform-hono",
-  "version": "1.0.0-alpha.12",
+  "version": "1.0.0-alpha.13",
   "main": "./dist/index.js",
   "files": [
     "dist"
@@ -21,10 +21,10 @@
   "peerDependencies": {
     "@kanjijs/auth": "workspace:*",
     "@kanjijs/contracts": "workspace:*",
-    "hono": "4.12.27",
+    "hono": "^4.12.27",
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "hono": "4.12.27"
+    "hono": "^4.12.27"
   }
 }
