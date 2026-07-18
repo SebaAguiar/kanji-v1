@@ -55,6 +55,12 @@ export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): o
     scripts['db:studio'] = 'kanji db:studio';
   }
 
+  if (opts.openapi) {
+    scripts['openapi:generate'] = 'kanji openapi:generate';
+    scripts['sdk:generate'] = 'kanji sdk:generate';
+    scripts['openapi:serve'] = 'kanji openapi:serve';
+  }
+
   const pm = opts.pm || 'bun';
 
   if (opts.tests) {
