@@ -9,12 +9,13 @@ export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): o
     '@kanjijs/platform-hono': versionSpec,
     '@kanjijs/contracts': versionSpec,
     '@kanjijs/cli': versionSpec,
-    hono: '^4.0.0',
+    hono: '^4.12.27',
     zod: '^3.0.0',
     'reflect-metadata': '^0.2.2',
   };
 
   const devDependencies: Record<string, string> = {
+    'bun-types': '^1.3.14',
     typescript: '^6.0.3',
   };
 
@@ -86,6 +87,7 @@ export function getTsConfigTemplate(): object {
       esModuleInterop: true,
       skipLibCheck: true,
       forceConsistentCasingInFileNames: true,
+      types: ['bun-types'],
     },
     include: ['src/**/*'],
   };
