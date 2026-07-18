@@ -29,7 +29,7 @@ export function registerOpenApiCommand(program: Command) {
         }
 
         const pkgPath = join(process.cwd(), 'package.json');
-        let pkg: any = {};
+        let pkg: { name?: string; version?: string } = {};
         try {
           if (await fileExists(pkgPath)) {
             pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
