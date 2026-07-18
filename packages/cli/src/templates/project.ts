@@ -2,13 +2,13 @@ import { ProjectOptions } from '../types.js';
 
 export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): object {
   const pm = opts.pm || 'bun';
-  const devScript = pm === 'bun' ? 'bun --watch src/main.ts' : 'node --import tsx src/main.ts';
   const startScript = pm === 'bun' ? 'bun src/main.ts' : 'node dist/main.js';
 
   const dependencies: Record<string, string> = {
     '@kanjijs/core': 'latest',
     '@kanjijs/platform-hono': 'latest',
     '@kanjijs/contracts': 'latest',
+    '@kanjijs/cli': 'latest',
     hono: '^4.0.0',
     zod: '^3.0.0',
     'reflect-metadata': '^0.2.2',
@@ -42,10 +42,17 @@ export function getPackageJsonTemplate(appName: string, opts: ProjectOptions): o
   }
 
   const scripts: Record<string, string> = {
-    dev: devScript,
-    build: 'tsc',
+    dev: 'kanji dev',
+    build: 'kanji build',
     start: startScript,
   };
+
+  if (opts.db === 'postgres') {
+    scripts['db:push'] = 'drizzle-kit push';
+    scripts['db:migrate'] = 'drizzle-kit migrate';
+    scripts['db:generate'] = 'drizzle-kit generate';
+    scripts['db:studio'] = 'drizzle-kit studio';
+  }
 
   if (opts.tests) {
     scripts['test'] = pm === 'bun' ? 'bun test' : 'vitest run';
@@ -181,7 +188,6 @@ drizzle/
 
 export function getReadmeTemplate(appName: string, opts: ProjectOptions): string {
   const pm = opts.pm || 'bun';
-  const runCmd = pm === 'bun' ? 'bun' : `${pm} run`;
   const installCmd = pm === 'bun' ? 'bun install' : `${pm} install`;
 
   return `# ${appName}
@@ -197,7 +203,7 @@ Generated with Kanji Framework CLI.
 
 2. Start the development server:
    \`\`\`bash
-   ${runCmd} dev
+   ${pm} run dev
    \`\`\`
 
 ## Architecture & Features
