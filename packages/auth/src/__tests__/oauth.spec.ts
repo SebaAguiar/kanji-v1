@@ -4,6 +4,8 @@ import {
   getAuthorizationUrl,
   exchangeCodeForToken,
   getUserProfile,
+  generateCodeVerifier,
+  generateCodeChallenge,
 } from '../oauth.js';
 import type { OAuthProviderConfig } from '../types.js';
 
@@ -217,5 +219,70 @@ describe('StateStore', () => {
     const entry2 = store.verify(state2);
     expect(entry2).not.toBeNull();
     expect(entry2!.provider).toBe('github');
+  });
+});
+
+describe('PKCE Support', () => {
+  it('should generate a cryptographically secure base64url code verifier', () => {
+    const verifier = generateCodeVerifier();
+    expect(verifier).toBeString();
+    expect(verifier.length).toBeGreaterThan(40);
+    expect(verifier).not.toContain('+');
+    expect(verifier).not.toContain('/');
+    expect(verifier).not.toContain('=');
+  });
+
+  it('should generate a SHA-256 code challenge from a verifier', async () => {
+    const verifier = 'test-code-verifier-value-random-enough-1234567890';
+    const challenge = await generateCodeChallenge(verifier);
+    expect(challenge).toBeString();
+    expect(challenge).not.toBe(verifier);
+    expect(challenge).not.toContain('+');
+    expect(challenge).not.toContain('/');
+    expect(challenge).not.toContain('=');
+  });
+
+  it('should include code_challenge parameters in authorization URL', () => {
+    const url = getAuthorizationUrl(
+      mockGoogleProvider,
+      'http://localhost:3000/callback',
+      'state',
+      'mock-challenge',
+    );
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('code_challenge')).toBe('mock-challenge');
+    expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
+  });
+
+  it('should send code_verifier when exchanging code for token', async () => {
+    const provider = { ...mockGoogleProvider, tokenUrl: 'https://example.com/token' };
+    const originalFetch = globalThis.fetch;
+    let requestBody: URLSearchParams | null = null;
+
+    globalThis.fetch = async (url, options) => {
+      if (options?.body instanceof URLSearchParams) {
+        requestBody = options.body;
+      } else if (typeof options?.body === 'string') {
+        requestBody = new URLSearchParams(options.body);
+      }
+      return new Response(
+        JSON.stringify({ access_token: 'mock-access-token', token_type: 'Bearer' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    try {
+      const token = await exchangeCodeForToken(
+        provider,
+        'auth-code',
+        'http://localhost:3000/callback',
+        'my-verifier',
+      );
+      expect(token).toBe('mock-access-token');
+      expect(requestBody).not.toBeNull();
+      expect(requestBody!.get('code_verifier')).toBe('my-verifier');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

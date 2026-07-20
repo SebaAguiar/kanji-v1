@@ -2,12 +2,11 @@
   "name": "kanji-v1",
   "version": "1.0.0",
   "description": "Backend framework for Bun with Hono, DI, native ORM, Auth and SDK generation",
-
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
-    "test": "rm -rf examples/*/dist && bun test",
-    "test:ci": "rm -rf examples/*/dist && bun test",
+    "test": "rm -rf examples/*/dist && pnpm -r test",
+    "test:ci": "rm -rf examples/*/dist && pnpm -r test",
     "lint": "eslint \"packages/**/src/**/*.ts\" \"examples/**/src/**/*.ts\"",
     "format": "prettier --write \"packages/**/*.ts\" \"examples/**/*.ts\"",
     "format:check": "prettier --check \"packages/**/*.ts\" \"examples/**/*.ts\"",
@@ -37,6 +36,7 @@
     "bun-types": "1.3.14",
     "drizzle-kit": "^0.30.0",
     "eslint": "10.6.0",
+    "mitata": "^1.0.34",
     "prettier": "3.9.4",
     "reflect-metadata": "^0.2.2",
     "typescript": "6.0.3",

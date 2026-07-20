@@ -17,7 +17,17 @@
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@kanjijs/platform-hono": ["./packages/platform-hono/src/index.ts"],
+      "@kanjijs/contracts": ["./packages/contracts/src/index.ts"],
+      "@kanjijs/core": ["./packages/core/src/index.ts"],
+      "@kanjijs/store": ["./packages/store/src/index.ts"],
+      "@kanjijs/auth": ["./packages/auth/src/index.ts"],
+      "@kanjijs/common": ["./packages/common/src/index.ts"],
+      "@kanjijs/openapi": ["./packages/openapi/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "dist"]
 }

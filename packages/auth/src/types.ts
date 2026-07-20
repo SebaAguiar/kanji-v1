@@ -20,6 +20,7 @@ export interface OAuthProviderConfig {
 
 export interface AuthConfig {
   jwtSecret: string;
+  previousSecrets?: string[];
   providers?: {
     google?: { clientId: string; clientSecret: string };
     github?: { clientId: string; clientSecret: string };

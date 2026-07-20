@@ -5,10 +5,31 @@ export function generateRandomState(): string {
   return randomUUID();
 }
 
+function base64urlEncode(buffer: Uint8Array): string {
+  return btoa(String.fromCharCode(...buffer))
+    .replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+export function generateCodeVerifier(): string {
+  const buffer = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  return base64urlEncode(buffer);
+}
+
+export async function generateCodeChallenge(verifier: string): Promise<string> {
+  const hash = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(verifier),
+  );
+  return base64urlEncode(new Uint8Array(hash));
+}
+
 export function getAuthorizationUrl(
   provider: OAuthProviderConfig,
   redirectUri: string,
   state: string,
+  codeChallenge?: string,
 ): string {
   const url = new URL(provider.authorizationUrl);
   url.searchParams.set('client_id', provider.clientId);
@@ -21,6 +42,11 @@ export function getAuthorizationUrl(
     url.searchParams.set('scope', scopes.join(' '));
   }
 
+  if (codeChallenge) {
+    url.searchParams.set('code_challenge', codeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+  }
+
   return url.toString();
 }
 
@@ -28,20 +54,27 @@ export async function exchangeCodeForToken(
   provider: OAuthProviderConfig,
   code: string,
   redirectUri: string,
+  codeVerifier?: string,
 ): Promise<string> {
+  const body = new URLSearchParams({
+    client_id: provider.clientId,
+    client_secret: provider.clientSecret,
+    code,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code',
+  });
+
+  if (codeVerifier) {
+    body.set('code_verifier', codeVerifier);
+  }
+
   const response = await fetch(provider.tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     },
-    body: new URLSearchParams({
-      client_id: provider.clientId,
-      client_secret: provider.clientSecret,
-      code,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-    }),
+    body,
   });
 
   if (!response.ok) {

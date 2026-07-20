@@ -16,6 +16,7 @@ describe('SaaS Starter API (E2E)', () => {
     const { AppModule } = await import('../app.module.js');
     const { ZodValidator } = await import('@kanjijs/contracts');
 
+
     const { app, container } = await KanjijsAdapter.create(AppModule, {
       logger: false,
       validator: new ZodValidator(),
