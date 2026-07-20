@@ -229,7 +229,9 @@ export class KanjijsAdapter {
         );
         if (rateLimitOptions) {
           const { createRateLimitMiddleware } = await import('./middleware/rate-limit.js');
-          middlewaresToApply.push(createRateLimitMiddleware(rateLimitOptions, routeKey));
+          middlewaresToApply.push(
+            createRateLimitMiddleware(rateLimitOptions, routeKey, options.rateLimitStore),
+          );
         }
 
         if (contract) {

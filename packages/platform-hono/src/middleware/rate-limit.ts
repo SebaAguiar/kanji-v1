@@ -1,13 +1,65 @@
 import type { MiddlewareHandler } from 'hono';
 import { TooManyRequestsError } from '@kanjijs/common';
 import type { RateLimitOptions } from '../decorators/rate-limit.js';
+import type { RateLimitStore } from '../types.js';
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
 
-export const _rateLimitStore = new Map<string, RateLimitEntry>();
+export class MemoryStore implements RateLimitStore {
+  private cache = new Map<string, RateLimitEntry>();
+  private cleanupTimer: ReturnType<typeof setInterval>;
+
+  constructor() {
+    const CLEANUP_INTERVAL_MS = 60000; // 1 minuto
+    this.cleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.cache.entries()) {
+        if (entry.resetAt <= now) {
+          this.cache.delete(key);
+        }
+      }
+    }, CLEANUP_INTERVAL_MS);
+
+    if (typeof this.cleanupTimer.unref === 'function') {
+      this.cleanupTimer.unref();
+    }
+  }
+
+  async increment(key: string, windowMs: number): Promise<{ count: number; resetTime: number }> {
+    const now = Date.now();
+    let entry = this.cache.get(key);
+
+    if (!entry || entry.resetAt <= now) {
+      entry = {
+        count: 0,
+        resetAt: now + windowMs,
+      };
+    }
+
+    entry.count++;
+    this.cache.set(key, entry);
+
+    return {
+      count: entry.count,
+      resetTime: entry.resetAt,
+    };
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  // Helper method for testing/introspection
+  getEntry(key: string): RateLimitEntry | undefined {
+    return this.cache.get(key);
+  }
+}
+
+export const defaultMemoryStore = new MemoryStore();
+export const _rateLimitStore = defaultMemoryStore;
 
 export function parseWindow(window: string | number): number {
   if (typeof window === 'number') {
@@ -35,30 +87,16 @@ export function parseWindow(window: string | number): number {
   }
 }
 
-// Cleanup periódico para evitar memory leaks
-const CLEANUP_INTERVAL_MS = 60000; // 1 minuto
-const cleanupTimer = setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of _rateLimitStore.entries()) {
-    if (entry.resetAt <= now) {
-      _rateLimitStore.delete(key);
-    }
-  }
-}, CLEANUP_INTERVAL_MS);
-
-// Permitir que el proceso de Bun termine de manera limpia sin esperar a que finalice el timer
-if (typeof cleanupTimer.unref === 'function') {
-  cleanupTimer.unref();
-}
-
 /**
  * Crea un middleware de Hono para limitar la tasa de solicitudes de un endpoint.
  */
 export function createRateLimitMiddleware(
   options: RateLimitOptions,
   routeKey: string,
+  globalStore?: RateLimitStore,
 ): MiddlewareHandler {
   const windowMs = parseWindow(options.window);
+  const store = options.store || globalStore || defaultMemoryStore;
 
   return async (c, next) => {
     let clientKey = '';
@@ -81,26 +119,16 @@ export function createRateLimitMiddleware(
 
     const key = `rate-limit:${routeKey}:${clientKey}`;
     const now = Date.now();
-    let entry = _rateLimitStore.get(key);
+    const result = await store.increment(key, windowMs);
 
-    if (!entry || entry.resetAt <= now) {
-      entry = {
-        count: 0,
-        resetAt: now + windowMs,
-      };
-    }
-
-    entry.count++;
-    _rateLimitStore.set(key, entry);
-
-    const remaining = Math.max(0, options.limit - entry.count);
-    const resetSeconds = Math.ceil((entry.resetAt - now) / 1000);
+    const remaining = Math.max(0, options.limit - result.count);
+    const resetSeconds = Math.ceil((result.resetTime - now) / 1000);
 
     c.header('X-RateLimit-Limit', String(options.limit));
     c.header('X-RateLimit-Remaining', String(remaining));
     c.header('X-RateLimit-Reset', String(resetSeconds));
 
-    if (entry.count > options.limit) {
+    if (result.count > options.limit) {
       throw new TooManyRequestsError(
         'Límite de solicitudes excedido. Por favor intente más tarde.',
       );

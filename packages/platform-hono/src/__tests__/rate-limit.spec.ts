@@ -153,6 +153,44 @@ describe('RateLimit Middleware', () => {
     expect(res2.status).toBe(200);
     expect(res2.headers.get('X-RateLimit-Remaining')).toBe('0');
   });
+
+  it('should support custom RateLimitStore implementations', async () => {
+    const app = new Hono();
+    let incrementCalled = false;
+    const customStore = {
+      async increment(key: string, windowMs: number) {
+        incrementCalled = true;
+        return { count: 1, resetTime: Date.now() + windowMs };
+      }
+    };
+    const options: RateLimitOptions = { limit: 5, window: '5s', by: 'global', store: customStore };
+    const middleware = createRateLimitMiddleware(options, 'test-route');
+
+    app.get('/test', middleware, (c) => c.text('ok'));
+
+    const res = await app.request('/test');
+    expect(res.status).toBe(200);
+    expect(incrementCalled).toBe(true);
+  });
+
+  it('should use global rateLimitStore from app options if provided', async () => {
+    const app = new Hono();
+    let globalStoreIncrementCalled = false;
+    const globalStore = {
+      async increment(key: string, windowMs: number) {
+        globalStoreIncrementCalled = true;
+        return { count: 1, resetTime: Date.now() + windowMs };
+      }
+    };
+    const options: RateLimitOptions = { limit: 5, window: '5s', by: 'global' };
+    const middleware = createRateLimitMiddleware(options, 'test-route', globalStore);
+
+    app.get('/test', middleware, (c) => c.text('ok'));
+
+    const res = await app.request('/test');
+    expect(res.status).toBe(200);
+    expect(globalStoreIncrementCalled).toBe(true);
+  });
 });
 
 describe('parseWindow', () => {

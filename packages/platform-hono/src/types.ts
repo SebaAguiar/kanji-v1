@@ -40,6 +40,10 @@ export interface Validator {
   validate(contract: ContractMetadata): MiddlewareHandler;
 }
 
+export interface RateLimitStore {
+  increment(key: string, windowMs: number): Promise<{ count: number; resetTime: number }>;
+}
+
 export interface KanjijsPlatformOptions {
   validator?: Validator;
   logger?: KanjiLogger | boolean;
@@ -47,6 +51,7 @@ export interface KanjijsPlatformOptions {
   cors?: CorsOptions | boolean;
   securityHeaders?: SecurityHeadersOptions | boolean;
   exceptionFilters?: Array<new (...args: never[]) => ExceptionFilter>;
+  rateLimitStore?: RateLimitStore;
 }
 
 export type KanjijsAdapterOptions = KanjijsPlatformOptions;

@@ -1,9 +1,11 @@
 import 'reflect-metadata';
+import type { RateLimitStore } from '../types.js';
 
 export interface RateLimitOptions {
   limit: number;
   window: string | number; // e.g., '1m', '5s', '1h', o milisegundos directamente
   by: 'ip' | 'user' | 'global';
+  store?: RateLimitStore;
 }
 
 /**
