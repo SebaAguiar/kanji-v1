@@ -6,6 +6,9 @@ import { mkdir, writeFile } from 'fs/promises';
 import { fileExists } from '../utils/file-generator.js';
 import { getGitHubActionsTemplate } from '../templates/ci/github-actions.js';
 import { getGitLabCITemplate } from '../templates/ci/gitlab-ci.js';
+import { getBitbucketPipelinesTemplate } from '../templates/ci/bitbucket.js';
+import { getCircleCIConfigTemplate } from '../templates/ci/circleci.js';
+import { getDockerfileTemplate } from '../templates/dockerfile.js';
 import { printNextSteps } from '../utils/next-steps.js';
 import { ProjectOptions, CiPlatform } from '../types.js';
 
@@ -18,7 +21,7 @@ interface CliInitCiOptions {
 export function registerInitCiCommand(program: Command) {
   program
     .command('init:ci')
-    .argument('[platform]', 'CI platform to initialize (github, gitlab)')
+    .argument('[platform]', 'CI/CD platform to initialize (github, gitlab, bitbucket, circleci, docker)')
     .option('--no-test', 'Do not run tests in CI')
     .option('--no-lint', 'Do not run lint in CI')
     .option('--no-build', 'Do not build the project in CI')
@@ -36,10 +39,13 @@ export function registerInitCiCommand(program: Command) {
         const resPlatform = await prompts({
           type: 'select',
           name: 'platform',
-          message: 'Select CI platform:',
+          message: 'Select CI/CD option:',
           choices: [
             { title: 'GitHub Actions', value: 'github' },
             { title: 'GitLab CI', value: 'gitlab' },
+            { title: 'Bitbucket Pipelines', value: 'bitbucket' },
+            { title: 'CircleCI', value: 'circleci' },
+            { title: 'Dockerfile', value: 'docker' },
           ],
         });
         platform = resPlatform.platform;
@@ -71,8 +77,13 @@ export function registerInitCiCommand(program: Command) {
         build = resSteps.build;
       } else {
         platform = platformArg?.toLowerCase() as CiPlatform;
-        if (platform !== 'github' && platform !== 'gitlab') {
-          console.error(pc.red(`Error: Unsupported platform "${platformArg}". Use "github" or "gitlab".`));
+        const validPlatforms: CiPlatform[] = ['github', 'gitlab', 'bitbucket', 'circleci', 'docker'];
+        if (!validPlatforms.includes(platform)) {
+          console.error(
+            pc.red(
+              `Error: Unsupported platform "${platformArg}". Use one of: ${validPlatforms.join(', ')}.`,
+            ),
+          );
           process.exit(1);
         }
       }
@@ -105,11 +116,28 @@ export function registerInitCiCommand(program: Command) {
           const ciFilePath = join(process.cwd(), '.gitlab-ci.yml');
           await writeFile(ciFilePath, ciTemplate, 'utf-8');
           console.log(pc.green(`  CREATED  .gitlab-ci.yml`));
+        } else if (platform === 'bitbucket') {
+          const ciTemplate = getBitbucketPipelinesTemplate(projOpts);
+          const ciFilePath = join(process.cwd(), 'bitbucket-pipelines.yml');
+          await writeFile(ciFilePath, ciTemplate, 'utf-8');
+          console.log(pc.green(`  CREATED  bitbucket-pipelines.yml`));
+        } else if (platform === 'circleci') {
+          const ciTemplate = getCircleCIConfigTemplate(projOpts);
+          const ciDir = join(process.cwd(), '.circleci');
+          await mkdir(ciDir, { recursive: true });
+          const ciFilePath = join(ciDir, 'config.yml');
+          await writeFile(ciFilePath, ciTemplate, 'utf-8');
+          console.log(pc.green(`  CREATED  .circleci/config.yml`));
+        } else if (platform === 'docker') {
+          const dockerTemplate = getDockerfileTemplate(projOpts);
+          const dockerFilePath = join(process.cwd(), 'Dockerfile');
+          await writeFile(dockerFilePath, dockerTemplate, 'utf-8');
+          console.log(pc.green(`  CREATED  Dockerfile`));
         }
 
         console.log(pc.bold(pc.green(`\nCI/CD pipeline for "${platform}" successfully initialized! 🚀`)));
         printNextSteps('ci', platform, {
-          ciPlatform: platform as 'github' | 'gitlab',
+          ciPlatform: platform as any,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

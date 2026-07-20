@@ -78,3 +78,11 @@ export function OperationId(id: string): MethodDecorator {
     Reflect.defineMetadata(OPENAPI_OPERATIONID_KEY, id, target, propertyKey);
   };
 }
+
+export const OPENAPI_EXAMPLE_KEY = 'kanji:openapi:example';
+
+export function Example(example: unknown): MethodDecorator {
+  return (target: object, propertyKey: string | symbol): void => {
+    Reflect.defineMetadata(OPENAPI_EXAMPLE_KEY, example, target, propertyKey);
+  };
+}

@@ -156,7 +156,7 @@ describe('SdkGenerator', () => {
     };
 
     const sdkCode = generator.generateSdk(doc);
-    expect(sdkCode).toContain('export interface GetTupleResponse [string, number]');
+    expect(sdkCode).toContain('export type GetTupleResponse = [string, number];');
   });
 
   it('should generate Record types when additionalProperties keyword is specified', () => {

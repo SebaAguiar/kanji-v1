@@ -7,7 +7,7 @@ export interface GeneratorOptions {
 
 export type DatabaseType = 'postgres' | 'mongodb' | 'none';
 export type AuthProvider = 'jwt' | 'google' | 'github' | 'microsoft';
-export type CiPlatform = 'github' | 'gitlab' | 'none';
+export type CiPlatform = 'github' | 'gitlab' | 'bitbucket' | 'circleci' | 'docker' | 'none';
 export type PackageManager = 'bun' | 'npm' | 'pnpm';
 export type AuthGenType = 'policies' | 'endpoints';
 

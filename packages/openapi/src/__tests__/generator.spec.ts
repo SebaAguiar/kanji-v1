@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { HttpMetadataStorage, Controller, Get } from '@kanjijs/platform-hono';
 import { OpenApiGenerator } from '../generator.js';
-import { Summary, Tag, BearerAuth, Deprecated, OperationId } from '../decorators.js';
+import { Summary, Tag, BearerAuth, Deprecated, OperationId, Example } from '../decorators.js';
 import type { OpenApiConfig } from '../types.js';
 
 const config: OpenApiConfig = { title: 'Test API', version: '0.0.1' };
@@ -18,6 +18,7 @@ export class ItemController {
   @Deprecated()
   @OperationId('customGetItems')
   @BearerAuth()
+  @Example({ key: 'val' })
   findAll() {}
 }
 
@@ -81,5 +82,12 @@ describe('OpenApiGenerator', () => {
       scheme: 'bearer',
       bearerFormat: 'JWT',
     });
+  });
+
+  it('reads @Example decorator metadata into operation.requestBody.content', () => {
+    const generator = new OpenApiGenerator(config);
+    const spec = generator.generateSpec();
+    const operation = spec.paths['/items']?.get;
+    expect(operation?.requestBody?.content['application/json']?.example).toEqual({ key: 'val' });
   });
 });

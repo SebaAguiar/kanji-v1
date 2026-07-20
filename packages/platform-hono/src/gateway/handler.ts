@@ -7,8 +7,7 @@ export class WsGatewayHandler {
   constructor(private readonly logger?: KanjiLogger) {}
 
   createUpgradeHandler(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    instance: Record<string | symbol, (...args: any[]) => unknown>,
+    instance: Record<string | symbol, Function>,
     gatewayClass: Function,
   ): MiddlewareHandler {
     const ws = WsMetadataStorage.getInstance();
@@ -38,7 +37,7 @@ export class WsGatewayHandler {
             const ctx = new WebSocketContext(c, wsRaw);
             const method = instance[connectHandler.propertyKey];
             if (typeof method === 'function') {
-              method(ctx);
+              method.call(instance, ctx);
             }
           },
 
@@ -78,15 +77,13 @@ export class WsGatewayHandler {
             const rawPayload = parsed.data ?? parsed.payload ?? parsed;
 
             // Contract validation (if @Contract is present on the method)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const contract: { body?: import('zod').ZodTypeAny } | undefined = Reflect.getMetadata(
               'kanji:contract',
               Object.getPrototypeOf(instance),
               propertyKey,
             );
 
-            const method = instance[propertyKey];
-            if (typeof method !== 'function') return;
+            if (typeof instance[propertyKey] !== 'function') return;
 
             let ctx: WebSocketContext;
 
@@ -113,11 +110,7 @@ export class WsGatewayHandler {
               ctx = new WebSocketContext(c, wsRaw);
             }
 
-            self.invokeHandler(
-              method as (ctx: WebSocketContext) => void | Promise<void>,
-              ctx,
-              wsRaw,
-            );
+            self.invokeHandler(instance, propertyKey, ctx, wsRaw);
           },
 
           onClose(_evt, wsRaw) {
@@ -125,7 +118,7 @@ export class WsGatewayHandler {
             const ctx = new WebSocketContext(c, wsRaw);
             const method = instance[disconnectHandler.propertyKey];
             if (typeof method === 'function') {
-              method(ctx);
+              method.call(instance, ctx);
             }
           },
 
@@ -134,7 +127,7 @@ export class WsGatewayHandler {
             const ctx = new WebSocketContext(c, wsRaw);
             const method = instance[errorHandler.propertyKey];
             if (typeof method === 'function') {
-              method(ctx);
+              method.call(instance, ctx);
             }
           },
         }));
@@ -145,12 +138,15 @@ export class WsGatewayHandler {
   }
 
   private invokeHandler(
-    method: (ctx: WebSocketContext) => void | Promise<void>,
+    instance: Record<string | symbol, Function>,
+    propertyKey: string | symbol,
     ctx: WebSocketContext,
     ws: { send: (data: string) => void },
   ): void {
     try {
-      const result = method(ctx);
+      const method = instance[propertyKey];
+      if (typeof method !== 'function') return;
+      const result = method.call(instance, ctx);
       if (result instanceof Promise) {
         result.catch((err: Error) => {
           this.handleWsError(err, ws);

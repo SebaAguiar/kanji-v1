@@ -18,10 +18,12 @@ export function parseZodSchema(schema: z.ZodTypeAny): OpenApiSchema {
           if (check.kind === 'email') parsed.format = 'email';
           else if (check.kind === 'uuid') parsed.format = 'uuid';
           else if (check.kind === 'url') parsed.format = 'uri';
-          else if (check.kind === 'min')
-            parsed.minItems = check.value; // Zod uses checks for minLength but we map it cleanly
-          else if (check.kind === 'max') parsed.maxItems = check.value;
-          else if (check.kind === 'regex') parsed.pattern = check.regex.source;
+          else if (check.kind === 'min') parsed.minLength = check.value;
+          else if (check.kind === 'max') parsed.maxLength = check.value;
+          else if (check.kind === 'length') {
+            parsed.minLength = check.value;
+            parsed.maxLength = check.value;
+          } else if (check.kind === 'regex') parsed.pattern = check.regex.source;
           else if (check.kind === 'startsWith') parsed.pattern = `^${escapeRegex(check.value)}`;
           else if (check.kind === 'endsWith') parsed.pattern = `${escapeRegex(check.value)}$`;
           else if (check.kind === 'includes') parsed.pattern = escapeRegex(check.value);
@@ -31,6 +33,12 @@ export function parseZodSchema(schema: z.ZodTypeAny): OpenApiSchema {
     }
     case 'ZodNumber': {
       parsed = { type: 'number' };
+      if (def.checks) {
+        for (const check of def.checks) {
+          if (check.kind === 'min') parsed.minimum = check.value;
+          else if (check.kind === 'max') parsed.maximum = check.value;
+        }
+      }
       break;
     }
     case 'ZodBoolean': {

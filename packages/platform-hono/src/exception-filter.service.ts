@@ -3,11 +3,11 @@ import type { ExceptionFilter } from '@kanjijs/common';
 
 export class ExceptionFilterService {
   private filters: Array<{
-    targets: Array<new (...args: any[]) => Error>;
+    targets: Array<new (...args: never[]) => Error>;
     instance: ExceptionFilter;
   }> = [];
 
-  register(instance: ExceptionFilter, targets: Array<new (...args: any[]) => Error>): void {
+  register(instance: ExceptionFilter, targets: Array<new (...args: never[]) => Error>): void {
     this.filters.push({ targets, instance });
   }
 

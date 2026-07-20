@@ -104,4 +104,21 @@ describe('ZodValidator Middleware', () => {
     expect(response.status).toBe(200);
     expect(validatedQueryAs).toEqual({ limit: 25 });
   });
+
+  it('should skip validation when contract has no request body', async () => {
+    const app = new Hono();
+
+    app.get(
+      '/test',
+      validator.validate({
+        method: 'GET',
+        path: '/test',
+      }),
+      (c) => c.text('OK'),
+    );
+
+    const response = await app.request('/test');
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('OK');
+  });
 });

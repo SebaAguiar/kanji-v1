@@ -57,7 +57,7 @@ describe('CLI New Command', () => {
     expect(srcFiles).toContain('main.ts');
     expect(srcFiles).toContain('app.module.ts');
     expect(srcFiles).toContain('app.controller.ts');
-    expect(srcFiles).toContain('db');
+    expect(srcFiles).toContain('database');
     expect(srcFiles).toContain('auth');
     expect(srcFiles).toContain('__tests__');
 

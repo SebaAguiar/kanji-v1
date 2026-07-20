@@ -4,6 +4,8 @@ import { Controller } from '../decorators/controller.js';
 import { Get, Post, Put, Delete, Patch } from '../decorators/route.js';
 import { HttpMetadataStorage } from '../http-metadata-storage.js';
 import { KANJI_CTX } from '../types.js';
+import { Use } from '../decorators/use.js';
+import type { MiddlewareHandler } from 'hono';
 
 describe('HttpMetadataStorage', () => {
   let storage: HttpMetadataStorage;
@@ -190,6 +192,10 @@ describe('KANJI_CTX Constants', () => {
     expect(KANJI_CTX.AUTH_PRINCIPAL).toBe('kanji.auth.principal');
     expect(KANJI_CTX.REQUEST_ID).toBe('kanji.requestId');
     expect(KANJI_CTX.CONTAINER).toBe('kanji.container');
+    expect(KANJI_CTX.RESOURCE_READ).toBe('kanji.resource.read');
+    expect(KANJI_CTX.RESOURCE_UPDATE).toBe('kanji.resource.update');
+    expect(KANJI_CTX.RESOURCE_DELETE).toBe('kanji.resource.delete');
+    expect(KANJI_CTX.RESOURCE_CREATE).toBe('kanji.resource.create');
   });
 });
 
@@ -224,5 +230,46 @@ describe('Hono Integration', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.requestId).toBe('req-123');
+  });
+});
+
+describe('@Use decorator', () => {
+  let storage: HttpMetadataStorage;
+
+  beforeEach(() => {
+    storage = HttpMetadataStorage.getInstance();
+    storage.controllers.clear();
+    storage.routes.clear();
+    storage.controllerMiddlewares.clear();
+    storage.routeMiddlewares.clear();
+  });
+
+  it('should register middleware on controller-level', () => {
+    const guard: MiddlewareHandler = async (c, next) => {
+      await next();
+    };
+
+    @Use(guard)
+    class GuardedController {}
+
+    const middlewares = storage.controllerMiddlewares.get(GuardedController);
+    expect(middlewares).toBeDefined();
+    expect(middlewares!.length).toBe(1);
+  });
+
+  it('should register middleware on route-level', () => {
+    const guard: MiddlewareHandler = async (c, next) => {
+      await next();
+    };
+
+    class TestController {
+      @Use(guard)
+      findOne() {}
+    }
+
+    const key = 'TestController:findOne';
+    const middlewares = storage.routeMiddlewares.get(key);
+    expect(middlewares).toBeDefined();
+    expect(middlewares!.length).toBe(1);
   });
 });

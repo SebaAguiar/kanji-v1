@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'bun:test';
 import {
   generateRandomState,
   getAuthorizationUrl,
@@ -58,6 +58,62 @@ describe('getAuthorizationUrl', () => {
 });
 
 describe('getUserProfile', () => {
+  it('should exchange code for access token successfully', async () => {
+    const provider = { ...mockGoogleProvider, tokenUrl: 'https://example.com/token' };
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async (url: RequestInfo | URL) => {
+      return new Response(
+        JSON.stringify({ access_token: 'mock-access-token', token_type: 'Bearer' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    try {
+      const token = await exchangeCodeForToken(provider, 'auth-code', 'http://localhost:3000/callback');
+      expect(token).toBe('mock-access-token');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('should throw when exchange code returns non-200 status', async () => {
+    const provider = { ...mockGoogleProvider, tokenUrl: 'https://example.com/token' };
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async () => {
+      return new Response('Bad Request', { status: 400, statusText: 'Bad Request' });
+    };
+
+    try {
+      await expect(
+        exchangeCodeForToken(provider, 'bad-code', 'http://localhost:3000/callback'),
+      ).rejects.toThrow('Failed to exchange code for token');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('should throw when exchange response has no access_token', async () => {
+    const provider = { ...mockGoogleProvider, tokenUrl: 'https://example.com/token' };
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify({ error: 'invalid_grant' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    try {
+      await expect(
+        exchangeCodeForToken(provider, 'bad-code', 'http://localhost:3000/callback'),
+      ).rejects.toThrow('Access token not found in provider response');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('should throw if user ID is missing from response', async () => {
     const provider = { ...mockGoogleProvider, userInfoUrl: 'https://example.com/userinfo' };
 
@@ -75,5 +131,91 @@ describe('getUserProfile', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('should return user profile for successful response', async () => {
+    const provider = { ...mockGoogleProvider, userInfoUrl: 'https://example.com/userinfo' };
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async () => {
+      return new Response(
+        JSON.stringify({ id: 'user-1', email: 'test@example.com', name: 'Test User' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    try {
+      const profile = await getUserProfile(provider, 'valid-token');
+      expect(profile.id).toBe('user-1');
+      expect(profile.email).toBe('test@example.com');
+      expect(profile.name).toBe('Test User');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('StateStore', () => {
+  let StateStore: typeof import('../state-store.js').StateStore;
+
+  beforeAll(async () => {
+    const mod = await import('../state-store.js');
+    StateStore = mod.StateStore;
+  });
+
+  it('should generate and verify a state', () => {
+    const store = new StateStore(10000);
+    const state = store.generate('google', 'http://localhost:3000/callback');
+    expect(state).toBeString();
+    expect(state.length).toBeGreaterThan(0);
+
+    const entry = store.verify(state);
+    expect(entry).not.toBeNull();
+    expect(entry!.provider).toBe('google');
+    expect(entry!.redirectUri).toBe('http://localhost:3000/callback');
+  });
+
+  it('should consume state on first verify (single use)', () => {
+    const store = new StateStore(10000);
+    const state = store.generate('github', 'http://localhost:3000/callback');
+
+    // First verify succeeds
+    const first = store.verify(state);
+    expect(first).not.toBeNull();
+
+    // Second verify returns null (consumed)
+    const second = store.verify(state);
+    expect(second).toBeNull();
+  });
+
+  it('should return null for unknown state', () => {
+    const store = new StateStore(10000);
+    const entry = store.verify('non-existent-state');
+    expect(entry).toBeNull();
+  });
+
+  it('should return null for expired state', async () => {
+    const store = new StateStore(50); // 50ms TTL
+    const state = store.generate('google', 'http://localhost:3000/callback');
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const entry = store.verify(state);
+    expect(entry).toBeNull();
+  });
+
+  it('should keep unexpired states valid after verifying a different one', () => {
+    const store = new StateStore(10000);
+    const state1 = store.generate('google', 'http://localhost:3000/callback1');
+    const state2 = store.generate('github', 'http://localhost:3000/callback2');
+
+    // Verify state1 — consumes it
+    const entry1 = store.verify(state1);
+    expect(entry1).not.toBeNull();
+
+    // state2 should still be valid
+    const entry2 = store.verify(state2);
+    expect(entry2).not.toBeNull();
+    expect(entry2!.provider).toBe('github');
   });
 });

@@ -4,9 +4,11 @@ import {
   Summary,
   Description,
   Tag,
+  Example,
   OPENAPI_SUMMARY_KEY,
   OPENAPI_DESCRIPTION_KEY,
   OPENAPI_TAGS_KEY,
+  OPENAPI_EXAMPLE_KEY,
 } from '../decorators.js';
 
 describe('OpenAPI Decorators', () => {
@@ -42,5 +44,16 @@ describe('OpenAPI Decorators', () => {
 
     const tags = Reflect.getMetadata(OPENAPI_TAGS_KEY, TestController.prototype, 'getItem');
     expect(tags).toEqual(['items', 'read']);
+  });
+
+  it('should define example metadata', () => {
+    const itemExample = { id: 1, name: 'Sample Item' };
+    class TestController {
+      @Example(itemExample)
+      getItem() {}
+    }
+
+    const example = Reflect.getMetadata(OPENAPI_EXAMPLE_KEY, TestController.prototype, 'getItem');
+    expect(example).toEqual(itemExample);
   });
 });

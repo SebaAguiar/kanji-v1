@@ -1,7 +1,6 @@
-// packages/platform-hono/src/types.ts
-
 import type { MiddlewareHandler } from 'hono';
-import { KanjiLogger } from '@kanjijs/common';
+import { KanjiLogger, type ExceptionFilter } from '@kanjijs/common';
+import type { SecurityHeadersOptions } from './middleware/security-headers.js';
 
 export const KANJI_CTX = {
   VALIDATED_BODY: 'kanji.validated.body',
@@ -18,6 +17,10 @@ export const KANJI_CTX = {
   AUTHZ_DECISION: 'kanji.authz.decision',
   REQUEST_ID: 'kanji.requestId',
   CONTAINER: 'kanji.container',
+  RESOURCE_READ: 'kanji.resource.read',
+  RESOURCE_UPDATE: 'kanji.resource.update',
+  RESOURCE_DELETE: 'kanji.resource.delete',
+  RESOURCE_CREATE: 'kanji.resource.create',
 } as const;
 
 export interface CorsOptions {
@@ -42,7 +45,8 @@ export interface KanjijsPlatformOptions {
   logger?: KanjiLogger | boolean;
   requestLogger?: boolean;
   cors?: CorsOptions | boolean;
-  exceptionFilters?: Array<new (...args: never[]) => any>;
+  securityHeaders?: SecurityHeadersOptions | boolean;
+  exceptionFilters?: Array<new (...args: never[]) => ExceptionFilter>;
 }
 
 export type KanjijsAdapterOptions = KanjijsPlatformOptions;

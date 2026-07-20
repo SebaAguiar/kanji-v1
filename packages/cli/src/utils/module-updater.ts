@@ -1,9 +1,106 @@
+import {
+  Project,
+  SyntaxKind,
+  ObjectLiteralExpression,
+  QuoteKind,
+  SourceFile,
+  ImportDeclaration,
+  PropertyAssignment,
+  ArrayLiteralExpression,
+  ObjectLiteralElementLike,
+} from 'ts-morph';
+
 export function ensurePropertyInDecorator(content: string, propertyName: string): string {
-  const regex = new RegExp(`\\b${propertyName}:`);
-  if (!regex.test(content)) {
-    return content.replace(/@KanjijsModule\(\{/, `@KanjijsModule({\n  ${propertyName}: [],`);
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    manipulationSettings: { quoteKind: QuoteKind.Single },
+  });
+  const sourceFile = project.createSourceFile('temp.ts', content);
+
+  const classDec = sourceFile.getClasses()[0];
+  const decorator = classDec?.getDecorator('KanjijsModule') || classDec?.getDecorator('Module');
+  if (!decorator) return content;
+
+  const callExpr = decorator.getCallExpression();
+  if (!callExpr) return content;
+
+  const objLiteral = callExpr.getArguments()[0];
+  if (!objLiteral || !ObjectLiteralExpression.isObjectLiteralExpression(objLiteral)) return content;
+
+  const existingProp = objLiteral.getProperty(propertyName);
+  if (existingProp) return content;
+
+  objLiteral.addPropertyAssignment({
+    name: propertyName,
+    initializer: '[]',
+  });
+
+  return sourceFile.getFullText();
+}
+
+function addImportIfMissing(sourceFile: SourceFile, moduleName: string, importPath: string): void {
+  const existingImport = sourceFile.getImportDeclaration((dec: ImportDeclaration) => {
+    const spec = dec.getModuleSpecifierValue();
+    return spec === importPath || spec === importPath.replace(/\.js$/, '');
+  });
+
+  if (existingImport) {
+    const namedImports = existingImport.getNamedImports().map((i) => i.getName());
+    if (!namedImports.includes(moduleName)) {
+      existingImport.addNamedImport(moduleName);
+    }
+  } else {
+    // Find last import declaration to insert after
+    const imports = sourceFile.getImportDeclarations();
+    if (imports.length > 0) {
+      const lastImport = imports[imports.length - 1];
+      sourceFile.insertImportDeclaration(lastImport.getChildIndex() + 1, {
+        namedImports: [moduleName],
+        moduleSpecifier: importPath,
+      });
+    } else {
+      sourceFile.addImportDeclaration({
+        namedImports: [moduleName],
+        moduleSpecifier: importPath,
+      });
+    }
   }
-  return content;
+}
+
+function addElementToArrayProperty(
+  sourceFile: SourceFile,
+  propertyName: string,
+  elementName: string,
+): void {
+  const classDec = sourceFile.getClasses()[0];
+  const decorator = classDec?.getDecorator('KanjijsModule') || classDec?.getDecorator('Module');
+  if (!decorator) return;
+
+  const callExpr = decorator.getCallExpression();
+  if (!callExpr) return;
+
+  const objLiteral = callExpr.getArguments()[0];
+  if (!objLiteral || !ObjectLiteralExpression.isObjectLiteralExpression(objLiteral)) return;
+
+  let prop: ObjectLiteralElementLike | undefined = objLiteral.getProperty(propertyName);
+  if (!prop) {
+    prop = objLiteral.addPropertyAssignment({
+      name: propertyName,
+      initializer: '[]',
+    });
+  }
+
+  if (prop && prop.getKind() === SyntaxKind.PropertyAssignment) {
+    const propAssignment = prop as PropertyAssignment;
+    const init = propAssignment.getInitializer();
+    if (init && init.getKind() === SyntaxKind.ArrayLiteralExpression) {
+      const arrayInit = init as ArrayLiteralExpression;
+      const elements = arrayInit.getElements().map((e) => e.getText().trim());
+      if (!elements.includes(elementName)) {
+        arrayInit.addElement(elementName);
+      }
+    }
+  }
 }
 
 export function updateAppModule(
@@ -11,96 +108,16 @@ export function updateAppModule(
   moduleName: string,
   importPath: string,
 ): string {
-  if (fileContent.includes(moduleName)) {
-    return fileContent;
-  }
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    manipulationSettings: { quoteKind: QuoteKind.Single },
+  });
+  const sourceFile = project.createSourceFile('temp.ts', fileContent);
 
-  const importStatement = `import { ${moduleName} } from '${importPath}';\n`;
-  let updatedContent = fileContent;
-  const lastImportIndex = fileContent.lastIndexOf('import ');
-  if (lastImportIndex !== -1) {
-    const nextNewLine = fileContent.indexOf('\n', lastImportIndex);
-    if (nextNewLine !== -1) {
-      updatedContent =
-        fileContent.slice(0, nextNewLine + 1) +
-        importStatement +
-        fileContent.slice(nextNewLine + 1);
-    } else {
-      updatedContent = importStatement + fileContent;
-    }
-  } else {
-    updatedContent = importStatement + fileContent;
-  }
+  addImportIfMissing(sourceFile, moduleName, importPath);
+  addElementToArrayProperty(sourceFile, 'imports', moduleName);
 
-  updatedContent = ensurePropertyInDecorator(updatedContent, 'imports');
-  const importsIndex = updatedContent.indexOf('imports:');
-  if (importsIndex === -1) {
-    return updatedContent;
-  }
-
-  const openBracketIndex = updatedContent.indexOf('[', importsIndex);
-  if (openBracketIndex === -1) {
-    return updatedContent;
-  }
-
-  let bracketCount = 1;
-  let closeBracketIndex = -1;
-  for (let i = openBracketIndex + 1; i < updatedContent.length; i++) {
-    if (updatedContent[i] === '[') {
-      bracketCount++;
-    } else if (updatedContent[i] === ']') {
-      bracketCount--;
-      if (bracketCount === 0) {
-        closeBracketIndex = i;
-        break;
-      }
-    }
-  }
-
-  if (closeBracketIndex === -1) {
-    return updatedContent;
-  }
-
-  const innerContent = updatedContent.slice(openBracketIndex + 1, closeBracketIndex);
-  const trimmedInner = innerContent.replace(/^\s*\n/, '').trimEnd();
-
-  let newInner = '';
-  if (trimmedInner.trim().length === 0) {
-    // Buscar la indentación de la línea de imports:
-    const beforeImports = updatedContent.slice(0, importsIndex);
-    const lastLineBeforeImports = beforeImports.split('\n').pop() || '';
-    const closeIndentMatch = lastLineBeforeImports.match(/^(\s*)/);
-    const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
-
-    newInner = `\n${closeIndent}  ${moduleName},\n${closeIndent}`;
-  } else {
-    const isMultiline = innerContent.includes('\n');
-    if (isMultiline) {
-      const lines = innerContent.split('\n').filter((line) => line.trim().length > 0);
-      const lastLine = lines[lines.length - 1];
-      const indentationMatch = lastLine.match(/^(\s*)/);
-      const indent = indentationMatch ? indentationMatch[1] : '    ';
-
-      const beforeImports = updatedContent.slice(0, importsIndex);
-      const lastLineBeforeImports = beforeImports.split('\n').pop() || '';
-      const closeIndentMatch = lastLineBeforeImports.match(/^(\s*)/);
-      const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
-
-      if (trimmedInner.endsWith(',')) {
-        newInner = `\n${trimmedInner}\n${indent}${moduleName},\n${closeIndent}`;
-      } else {
-        newInner = `\n${trimmedInner},\n${indent}${moduleName},\n${closeIndent}`;
-      }
-    } else {
-      newInner = `${trimmedInner.trim()}, ${moduleName}`;
-    }
-  }
-
-  updatedContent =
-    updatedContent.slice(0, openBracketIndex + 1) +
-    newInner +
-    updatedContent.slice(closeBracketIndex);
-  return updatedContent;
+  return sourceFile.getFullText();
 }
 
 export function updateLocalModule(
@@ -109,98 +126,14 @@ export function updateLocalModule(
   importPath: string,
   arrayName: 'controllers' | 'providers' | 'exports' | 'gateways',
 ): string {
-  let updatedContent = fileContent;
-  const importStatement = `import { ${className} } from '${importPath}';\n`;
-  if (!fileContent.includes(importStatement)) {
-    const lastImportIndex = fileContent.lastIndexOf('import ');
-    if (lastImportIndex !== -1) {
-      const nextNewLine = fileContent.indexOf('\n', lastImportIndex);
-      if (nextNewLine !== -1) {
-        updatedContent =
-          fileContent.slice(0, nextNewLine + 1) +
-          importStatement +
-          fileContent.slice(nextNewLine + 1);
-      } else {
-        updatedContent = importStatement + fileContent;
-      }
-    } else {
-      updatedContent = importStatement + fileContent;
-    }
-  }
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    manipulationSettings: { quoteKind: QuoteKind.Single },
+  });
+  const sourceFile = project.createSourceFile('temp.ts', fileContent);
 
-  updatedContent = ensurePropertyInDecorator(updatedContent, arrayName);
-  const propertyKey = `${arrayName}:`;
-  const propertyIndex = updatedContent.indexOf(propertyKey);
-  if (propertyIndex === -1) {
-    return updatedContent;
-  }
+  addImportIfMissing(sourceFile, className, importPath);
+  addElementToArrayProperty(sourceFile, arrayName, className);
 
-  const openBracketIndex = updatedContent.indexOf('[', propertyIndex);
-  if (openBracketIndex === -1) {
-    return updatedContent;
-  }
-
-  let bracketCount = 1;
-  let closeBracketIndex = -1;
-  for (let i = openBracketIndex + 1; i < updatedContent.length; i++) {
-    if (updatedContent[i] === '[') {
-      bracketCount++;
-    } else if (updatedContent[i] === ']') {
-      bracketCount--;
-      if (bracketCount === 0) {
-        closeBracketIndex = i;
-        break;
-      }
-    }
-  }
-
-  if (closeBracketIndex === -1) {
-    return updatedContent;
-  }
-
-  const innerContent = updatedContent.slice(openBracketIndex + 1, closeBracketIndex);
-
-  const elementRegex = new RegExp(`\\b${className}\\b`);
-  if (elementRegex.test(innerContent)) {
-    return updatedContent;
-  }
-
-  const trimmedInner = innerContent.replace(/^\s*\n/, '').trimEnd();
-
-  let newInner = '';
-  if (trimmedInner.trim().length === 0) {
-    const beforeProperty = updatedContent.slice(0, propertyIndex);
-    const lastLineBeforeProperty = beforeProperty.split('\n').pop() || '';
-    const closeIndentMatch = lastLineBeforeProperty.match(/^(\s*)/);
-    const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
-
-    newInner = `\n${closeIndent}  ${className},\n${closeIndent}`;
-  } else {
-    const isMultiline = innerContent.includes('\n');
-    if (isMultiline) {
-      const lines = innerContent.split('\n').filter((line) => line.trim().length > 0);
-      const lastLine = lines[lines.length - 1];
-      const indentationMatch = lastLine.match(/^(\s*)/);
-      const indent = indentationMatch ? indentationMatch[1] : '    ';
-
-      const beforeProperty = updatedContent.slice(0, propertyIndex);
-      const lastLineBeforeProperty = beforeProperty.split('\n').pop() || '';
-      const closeIndentMatch = lastLineBeforeProperty.match(/^(\s*)/);
-      const closeIndent = closeIndentMatch ? closeIndentMatch[1] : '  ';
-
-      if (trimmedInner.endsWith(',')) {
-        newInner = `\n${trimmedInner}\n${indent}${className},\n${closeIndent}`;
-      } else {
-        newInner = `\n${trimmedInner},\n${indent}${className},\n${closeIndent}`;
-      }
-    } else {
-      newInner = `${trimmedInner.trim()}, ${className}`;
-    }
-  }
-
-  updatedContent =
-    updatedContent.slice(0, openBracketIndex + 1) +
-    newInner +
-    updatedContent.slice(closeBracketIndex);
-  return updatedContent;
+  return sourceFile.getFullText();
 }

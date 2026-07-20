@@ -1,8 +1,92 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { Hono } from 'hono';
+import { KanjijsModule } from '@kanjijs/core';
+import { KanjijsAdapter } from '../hono-adapter.js';
 import { HttpMetadataStorage } from '../http-metadata-storage.js';
 import { requestIdMiddleware } from '../middleware/request-id.js';
 import { KanjiError, NotFoundError, ValidationError } from '@kanjijs/common';
+import { Controller, Get } from '../index.js';
+
+@Controller('/test')
+class TestController {
+  @Get('/')
+  index(c: any) {
+    return c.text('ok');
+  }
+}
+
+@KanjijsModule({
+  controllers: [TestController],
+})
+class SimpleAppModule {}
+
+describe('KanjijsAdapter', () => {
+  it('should create app with logger and return full API', async () => {
+    const instance = await KanjijsAdapter.create(SimpleAppModule, { logger: true });
+    expect(instance.app).toBeDefined();
+    expect(instance.container).toBeDefined();
+    expect(instance.serve).toBeFunction();
+    expect(instance.shutdown).toBeFunction();
+    await instance.shutdown();
+  });
+
+  it('should create app with CORS enabled', async () => {
+    const instance = await KanjijsAdapter.create(SimpleAppModule, {
+      logger: false,
+      cors: true,
+    });
+
+    const res = await instance.app.request('/test', {
+      method: 'OPTIONS',
+      headers: { Origin: 'http://example.com' },
+    });
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    await instance.shutdown();
+  });
+
+  it('should apply default security headers if enabled', async () => {
+    const instance = await KanjijsAdapter.create(SimpleAppModule, {
+      logger: false,
+    });
+
+    const res = await instance.app.request('/test');
+    expect(res.headers.get('Strict-Transport-Security')).toContain('max-age=31536000');
+    expect(res.headers.get('Content-Security-Policy')).toBe("default-src 'self'");
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(res.headers.get('X-XSS-Protection')).toBe('0');
+    await instance.shutdown();
+  });
+
+  it('should not apply security headers if explicitly disabled', async () => {
+    const instance = await KanjijsAdapter.create(SimpleAppModule, {
+      logger: false,
+      securityHeaders: false,
+    });
+
+    const res = await instance.app.request('/test');
+    expect(res.headers.get('Strict-Transport-Security')).toBeNull();
+    expect(res.headers.get('Content-Security-Policy')).toBeNull();
+    await instance.shutdown();
+  });
+
+  it('should apply customized security headers options', async () => {
+    const instance = await KanjijsAdapter.create(SimpleAppModule, {
+      logger: false,
+      securityHeaders: {
+        hsts: { maxAge: 100, includeSubDomains: false },
+        contentSecurityPolicy: "default-src 'none'",
+        xFrameOptions: 'SAMEORIGIN',
+      },
+    });
+
+    const res = await instance.app.request('/test');
+    expect(res.headers.get('Strict-Transport-Security')).toBe('max-age=100');
+    expect(res.headers.get('Content-Security-Policy')).toBe("default-src 'none'");
+    expect(res.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
+    await instance.shutdown();
+  });
+});
 
 describe('requestIdMiddleware', () => {
   beforeEach(() => {

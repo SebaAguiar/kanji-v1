@@ -1,11 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { z } from 'zod';
-import { KanjijsModule } from '@kanjijs/core';
+import { KanjijsModule, Injectable } from '@kanjijs/core';
 import { KanjijsAdapter } from '../hono-adapter.js';
-import { WebSocketGateway, WebSocketMessage, WebSocketEvent } from '../gateway/decorators.js';
+import { WebSocketGateway, WebSocketMessage, WebSocketEvent, UseWsGuards } from '../gateway/decorators.js';
 import { WebSocketContext } from '../gateway/ws-context.js';
 import { WsMetadataStorage } from '../gateway/ws-metadata-storage.js';
 import { Contract } from '@kanjijs/contracts';
+import type { MiddlewareHandler } from 'hono';
+import { KANJI_CTX } from '../types.js';
+
+// Mock auth guard and middleware
+const mockAuthGuard: MiddlewareHandler = async (c, next) => {
+  const token = c.req.query('token');
+  if (!token || token !== 'valid-token') {
+    c.status(401);
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  c.set(KANJI_CTX.AUTH_USER as string, { id: 'user-1', email: 'test@test.com', name: 'Test', roles: ['user'] });
+  await next();
+};
 
 @WebSocketGateway('/ws-test')
 class TestGateway {
@@ -36,8 +49,52 @@ class TestGateway {
   }
 }
 
+@WebSocketGateway('/ws-auth')
+class AuthGateway {
+  public static eventsReceived: string[] = [];
+  public static userInfo: any = null;
+
+  @WebSocketEvent('connect')
+  onConnect(ctx: WebSocketContext) {
+    AuthGateway.eventsReceived.push('connect');
+    const user = ctx.get(KANJI_CTX.AUTH_USER as any);
+    AuthGateway.userInfo = user;
+    ctx.send('auth_status', { authenticated: !!user });
+  }
+
+  @WebSocketMessage('ping')
+  onPing(ctx: WebSocketContext) {
+    ctx.send('pong', {});
+  }
+
+  @WebSocketEvent('disconnect')
+  onDisconnect(ctx: WebSocketContext) {
+    AuthGateway.eventsReceived.push('disconnect');
+  }
+}
+
+@WebSocketGateway('/ws-error')
+class ErrorGateway {
+  public static errorReceived: string | null = null;
+
+  @WebSocketEvent('connect')
+  onConnect(ctx: WebSocketContext) {
+    ctx.send('welcome', {});
+  }
+
+  @WebSocketMessage('crash')
+  onCrash(ctx: WebSocketContext) {
+    throw new Error('Simulated handler crash');
+  }
+
+  @WebSocketEvent('disconnect')
+  onDisconnect(ctx: WebSocketContext) {
+    ErrorGateway.errorReceived = 'disconnected';
+  }
+}
+
 @KanjijsModule({
-  gateways: [TestGateway],
+  gateways: [TestGateway, AuthGateway, ErrorGateway],
 })
 class TestAppModule {}
 
@@ -48,6 +105,9 @@ describe('WebSocket Support', () => {
   beforeEach(() => {
     TestGateway.messagesReceived = [];
     TestGateway.eventsReceived = [];
+    AuthGateway.eventsReceived = [];
+    AuthGateway.userInfo = null;
+    ErrorGateway.errorReceived = null;
   });
 
   afterEach(async () => {
@@ -207,5 +267,110 @@ describe('WebSocket Support', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(disconnected).toBe(true);
+  });
+
+  it('should reject WebSocket upgrade when @UseWsGuards denies access', async () => {
+    @WebSocketGateway('/ws-guard-test')
+    @UseWsGuards(mockAuthGuard)
+    class GuardedGateway {
+      public static connected = false;
+
+      @WebSocketEvent('connect')
+      onConnect(ctx: WebSocketContext) {
+        GuardedGateway.connected = true;
+      }
+
+      @WebSocketEvent('disconnect')
+      onDisconnect(ctx: WebSocketContext) {
+        // noop
+      }
+    }
+
+    @KanjijsModule({ gateways: [GuardedGateway] })
+    class GuardedModule {}
+
+    const guardedApp = await KanjijsAdapter.create(GuardedModule, { logger: false });
+    const guardPort = 8000 + Math.floor(Math.random() * 1000);
+    guardedApp.serve({ port: guardPort });
+
+    // Connect without token — should be rejected
+    const connectionResult = await new Promise<string>((resolve) => {
+      const client = new WebSocket(`ws://localhost:${guardPort}/ws-guard-test`);
+      client.onerror = () => {
+        resolve('error');
+      };
+      client.onopen = () => {
+        resolve('open');
+        client.close();
+      };
+      // Timeout safeguard
+      setTimeout(() => resolve('timeout'), 5000);
+    });
+
+    expect(connectionResult).toBe('error');
+
+    await guardedApp.shutdown({ force: true });
+  });
+
+  it('should return INTERNAL_ERROR when a handler throws', async () => {
+    appInstance = await KanjijsAdapter.create(TestAppModule, { logger: false });
+    port = 9000 + Math.floor(Math.random() * 1000);
+    appInstance.serve({ port });
+
+    const client = new WebSocket(`ws://localhost:${port}/ws-error`);
+
+    await new Promise<void>((resolve) => {
+      client.onopen = () => resolve();
+    });
+
+    // Send a message that triggers a crash
+    const errorPromise = new Promise<{ code: string; message: string }>((resolve) => {
+      client.onmessage = (event) => {
+        const parsed = JSON.parse(event.data as string);
+        if (parsed.event === 'error' && parsed.data?.code === 'INTERNAL_ERROR') {
+          resolve(parsed.data);
+        }
+      };
+    });
+
+    client.send(JSON.stringify({ event: 'crash', data: {} }));
+
+    const errorData = await errorPromise;
+
+    expect(errorData.code).toBe('INTERNAL_ERROR');
+    expect(errorData.message).toBe('Simulated handler crash');
+
+    client.close();
+  });
+
+  it('should support multiple WebSocket gateways in the same app', async () => {
+    appInstance = await KanjijsAdapter.create(TestAppModule, { logger: false });
+    port = 10000 + Math.floor(Math.random() * 1000);
+    appInstance.serve({ port });
+
+    // Connect to first gateway
+    const client1 = new WebSocket(`ws://localhost:${port}/ws-test`);
+    let client1Connected = false;
+    await new Promise<void>((resolve) => {
+      client1.onopen = () => {
+        client1Connected = true;
+        resolve();
+      };
+    });
+    expect(client1Connected).toBe(true);
+
+    // Connect to second gateway
+    const client2 = new WebSocket(`ws://localhost:${port}/ws-error`);
+    let client2Connected = false;
+    await new Promise<void>((resolve) => {
+      client2.onopen = () => {
+        client2Connected = true;
+        resolve();
+      };
+    });
+    expect(client2Connected).toBe(true);
+
+    client1.close();
+    client2.close();
   });
 });

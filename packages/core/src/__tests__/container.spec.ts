@@ -97,32 +97,6 @@ describe('DI Container', () => {
     expect(client.apiKey).toBe('secret-key-123');
   });
 
-  it('should detect circular dependencies and throw error', async () => {
-    const container = new Container({ logger: false });
-
-    @Injectable()
-    class ServiceA {
-      constructor(@Inject('ServiceB') public readonly b: any) {}
-    }
-
-    @Injectable()
-    class ServiceB {
-      constructor(@Inject('ServiceA') public readonly a: any) {}
-    }
-
-    @KanjijsModule({
-      providers: [
-        { provide: 'ServiceA', useClass: ServiceA },
-        { provide: 'ServiceB', useClass: ServiceB },
-      ],
-    })
-    class LoopModule {}
-
-    expect(async () => {
-      await container.bootstrap(LoopModule);
-    }).toThrow();
-  });
-
   it('should support factory providers (useFactory)', async () => {
     const container = new Container({ logger: false });
     const DSN = Symbol('DSN');
@@ -231,5 +205,244 @@ describe('DI Container', () => {
 
     await container.shutdown();
     expect(events).toEqual(['init', 'bootstrap', 'destroy']);
+  });
+
+  // ========== NEW TESTS ==========
+
+  it('should throw an error when resolving a non-visible token', async () => {
+    const container = new Container({ logger: false });
+
+    const HIDDEN = Symbol('HIDDEN');
+
+    @KanjijsModule({
+      providers: [{ provide: HIDDEN, useValue: 'secret' }],
+      // no exports → not visible to other modules
+    })
+    class SecretModule {}
+
+    @KanjijsModule({
+      imports: [SecretModule],
+    })
+    class ConsumerModule {}
+
+    await container.bootstrap(ConsumerModule);
+
+    await expect(container.resolve(HIDDEN, ConsumerModule)).rejects.toThrow(
+      'is not visible in module',
+    );
+  });
+
+  it('should support recursive module imports', async () => {
+    const container = new Container({ logger: false });
+
+    const LEVEL3 = Symbol('LEVEL3');
+
+    @KanjijsModule({
+      providers: [{ provide: LEVEL3, useValue: 'deep-value' }],
+      exports: [LEVEL3],
+    })
+    class Level3Module {}
+
+    @KanjijsModule({
+      imports: [Level3Module],
+    })
+    class Level2Module {}
+
+    @KanjijsModule({
+      imports: [Level2Module],
+    })
+    class Level1Module {}
+
+    // Level1 does not import Level3 directly — it's 2 hops away
+    await container.bootstrap(Level1Module);
+    await expect(container.resolve(LEVEL3, Level1Module)).rejects.toThrow();
+  });
+
+  it('should make exported tokens visible one level deep (not transitive)', async () => {
+    const container = new Container({ logger: false });
+    const DB_CLIENT = Symbol('DB_CLIENT');
+
+    @KanjijsModule({
+      providers: [{ provide: DB_CLIENT, useValue: 'pg://localhost' }],
+      exports: [DB_CLIENT],
+    })
+    class DatabaseModule {}
+
+    @KanjijsModule({
+      imports: [DatabaseModule],
+    })
+    class UsersModule {}
+
+    @KanjijsModule({
+      imports: [UsersModule],
+    })
+    class AppModule {}
+
+    await container.bootstrap(AppModule);
+    // DB_CLIENT is exported by DatabaseModule, which is imported by UsersModule.
+    // AppModule imports UsersModule, not DatabaseModule directly — so DB_CLIENT
+    // is NOT visible in AppModule (Kanji does not support transitive visibility).
+    await expect(container.resolve(DB_CLIENT, AppModule)).rejects.toThrow(
+      'is not visible in module',
+    );
+
+    // But it IS visible from UsersModule (direct import)
+    const db = await container.resolve(DB_CLIENT, UsersModule);
+    expect(db).toBe('pg://localhost');
+  });
+
+  it('should handle useClass providers correctly', async () => {
+    const container = new Container({ logger: false });
+    const SERVICE = Symbol('SERVICE');
+
+    @Injectable()
+    class RealService {
+      public readonly name = 'real';
+    }
+
+    @Injectable()
+    class MockService {
+      public readonly name = 'mock';
+    }
+
+    @KanjijsModule({
+      providers: [{ provide: SERVICE, useClass: MockService }],
+    })
+    class TestModule {}
+
+    await container.bootstrap(TestModule);
+    const instance = await container.resolve(SERVICE, TestModule);
+    expect(instance).toBeInstanceOf(MockService);
+    expect((instance as MockService).name).toBe('mock');
+  });
+
+  it('should register and retrieve controllers', async () => {
+    const container = new Container({ logger: false });
+
+    @Injectable()
+    class UsersController {}
+
+    @KanjijsModule({
+      controllers: [UsersController],
+    })
+    class AppModule {}
+
+    await container.bootstrap(AppModule);
+    const controllers = container.getControllers();
+    expect(controllers).toHaveLength(1);
+    expect(controllers[0].controller).toBe(UsersController);
+    expect(controllers[0].module).toBe(AppModule);
+  });
+
+  it('should register and retrieve gateways', async () => {
+    const container = new Container({ logger: false });
+
+    class ChatGateway {}
+
+    @KanjijsModule({
+      gateways: [ChatGateway],
+    })
+    class AppModule {}
+
+    await container.bootstrap(AppModule);
+    const gateways = container.getGateways();
+    expect(gateways).toHaveLength(1);
+    expect(gateways[0].gateway).toBe(ChatGateway);
+    expect(gateways[0].module).toBe(AppModule);
+  });
+
+  it('should throw an error when bootstrapping a module without @KanjijsModule', async () => {
+    const container = new Container({ logger: false });
+
+    class PlainModule {}
+
+    await expect(container.bootstrap(PlainModule)).rejects.toThrow('missing @KanjijsModule');
+  });
+
+  it('should make global module providers visible when module is imported', async () => {
+    const container = new Container({ logger: false });
+    const DB = Symbol('DB');
+
+    @KanjijsModule({
+      providers: [{ provide: DB, useValue: 'global-db' }],
+      exports: [DB],
+      global: true,
+    })
+    class GlobalDbModule {}
+
+    @KanjijsModule({
+      imports: [GlobalDbModule],
+    })
+    class AppModule {}
+
+    await container.bootstrap(AppModule);
+    const db = await container.resolve(DB, AppModule);
+    expect(db).toBe('global-db');
+  });
+
+  it('should support dynamic module with providers and exports', async () => {
+    const container = new Container({ logger: false });
+    const CONFIG = Symbol('CONFIG');
+
+    @KanjijsModule({})
+    class ConfigModule {
+      static forRoot(config: Record<string, string>) {
+        return {
+          module: ConfigModule,
+          providers: [{ provide: CONFIG, useValue: config }],
+          exports: [CONFIG],
+        };
+      }
+    }
+
+    @KanjijsModule({
+      imports: [ConfigModule.forRoot({ env: 'test' })],
+    })
+    class AppModule {}
+
+    await container.bootstrap(AppModule);
+    const config = await container.resolve(CONFIG, AppModule);
+    expect(config).toEqual({ env: 'test' });
+  });
+
+  it('should resolve the same instance for singleton providers (value)', async () => {
+    const container = new Container({ logger: false });
+    const TOKEN = Symbol('TOKEN');
+
+    @KanjijsModule({
+      providers: [{ provide: TOKEN, useValue: { count: 0 } }],
+    })
+    class SingletonModule {}
+
+    await container.bootstrap(SingletonModule);
+    const a = await container.resolve(TOKEN, SingletonModule);
+    const b = await container.resolve(TOKEN, SingletonModule);
+    (a as Record<string, number>).count = 42;
+    expect((b as Record<string, number>).count).toBe(42);
+    expect(a).toBe(b);
+  });
+
+  it('should detect circular dependencies and throw error', async () => {
+    const container = new Container({ logger: false });
+
+    @Injectable()
+    class ServiceA {
+      constructor(@Inject('ServiceB') public readonly b: unknown) {}
+    }
+
+    @Injectable()
+    class ServiceB {
+      constructor(@Inject('ServiceA') public readonly a: unknown) {}
+    }
+
+    @KanjijsModule({
+      providers: [
+        { provide: 'ServiceA', useClass: ServiceA },
+        { provide: 'ServiceB', useClass: ServiceB },
+      ],
+    })
+    class LoopModule {}
+
+    await expect(container.bootstrap(LoopModule)).rejects.toThrow();
   });
 });

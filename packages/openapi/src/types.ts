@@ -21,6 +21,10 @@ export interface OpenApiSchema {
   prefixItems?: OpenApiSchema[];
   minItems?: number;
   maxItems?: number;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
   example?: unknown;
 }
 
@@ -37,6 +41,8 @@ export interface OpenApiRequestBody {
   content: {
     'application/json'?: {
       schema: OpenApiSchema;
+      example?: unknown;
+      examples?: Record<string, unknown>;
     };
   };
   required?: boolean;

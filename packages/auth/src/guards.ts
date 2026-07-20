@@ -2,6 +2,12 @@ import type { Context, Next, MiddlewareHandler } from 'hono';
 import { KANJI_CTX, HttpMetadataStorage } from '@kanjijs/platform-hono';
 import type { ClassLevelPermissions, ClpPermissionRule, AclOptions } from './policy.js';
 
+interface AuthorizationDecision {
+  allowed: boolean;
+  action: string;
+  reason: string;
+}
+
 export const AuthGuard: MiddlewareHandler = async (
   c: Context,
   next: Next,
@@ -47,7 +53,19 @@ export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
       );
     }
 
+    const setAuthzDecision = (reason: string) => {
+      const decision: AuthorizationDecision = { allowed: true, action, reason };
+      c.set(KANJI_CTX.AUTHZ_DECISION as string, decision);
+      let cache = c.get(KANJI_CTX.AUTHZ_CACHE as string) as Map<string, AuthorizationDecision>;
+      if (!cache) {
+        cache = new Map();
+        c.set(KANJI_CTX.AUTHZ_CACHE as string, cache);
+      }
+      cache.set(action, decision);
+    };
+
     if (rule === 'public' || (typeof rule === 'object' && rule.public === true)) {
+      setAuthzDecision('public access');
       await next();
       return;
     }
@@ -61,12 +79,14 @@ export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
     }
 
     if (rule === 'authenticated') {
+      setAuthzDecision('authenticated access');
       await next();
       return;
     }
 
     const ruleObj = rule as ClpPermissionRule;
     if (ruleObj.authenticated) {
+      setAuthzDecision('authenticated access');
       await next();
       return;
     }
@@ -89,6 +109,7 @@ export function clp(permissions: ClassLevelPermissions): MiddlewareHandler {
       );
     }
 
+    setAuthzDecision('role matched');
     await next();
   };
 }
@@ -143,7 +164,21 @@ export function acl(options: AclOptions): MiddlewareHandler {
       );
     }
 
-    c.set(`kanji.resource.${options.action}`, resource);
+    const decision: AuthorizationDecision = { allowed: true, action: options.action, reason: 'policy passed' };
+    c.set(KANJI_CTX.AUTHZ_DECISION as string, decision);
+    let cache = c.get(KANJI_CTX.AUTHZ_CACHE as string) as Map<string, AuthorizationDecision>;
+    if (!cache) {
+      cache = new Map();
+      c.set(KANJI_CTX.AUTHZ_CACHE as string, cache);
+    }
+    cache.set(options.action, decision);
+
+    const resourceKey = KANJI_CTX[`RESOURCE_${options.action.toUpperCase()}` as keyof typeof KANJI_CTX];
+    if (typeof resourceKey === 'string') {
+      c.set(resourceKey, resource);
+    } else {
+      c.set(`kanji.resource.${options.action}`, resource);
+    }
     await next();
   };
 }

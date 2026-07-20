@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, beforeAll } from 'bun:test';
 import { Hono } from 'hono';
 import { RateLimit, type RateLimitOptions } from '../decorators/rate-limit.js';
 import { createRateLimitMiddleware, _rateLimitStore } from '../middleware/rate-limit.js';
@@ -152,5 +152,78 @@ describe('RateLimit Middleware', () => {
     });
     expect(res2.status).toBe(200);
     expect(res2.headers.get('X-RateLimit-Remaining')).toBe('0');
+  });
+});
+
+describe('parseWindow', () => {
+  let parseWindow: (window: string | number) => number;
+
+  beforeAll(async () => {
+    const mod = await import('../middleware/rate-limit.js');
+    parseWindow = mod.parseWindow;
+  });
+
+  it('should parse milliseconds', () => {
+    expect(parseWindow('100ms')).toBe(100);
+    expect(parseWindow('500ms')).toBe(500);
+  });
+
+  it('should parse seconds', () => {
+    expect(parseWindow('1s')).toBe(1000);
+    expect(parseWindow('30s')).toBe(30000);
+  });
+
+  it('should parse minutes', () => {
+    expect(parseWindow('1m')).toBe(60000);
+    expect(parseWindow('5m')).toBe(300000);
+  });
+
+  it('should parse hours', () => {
+    expect(parseWindow('1h')).toBe(3600000);
+    expect(parseWindow('2h')).toBe(7200000);
+  });
+
+  it('should parse days', () => {
+    expect(parseWindow('1d')).toBe(86400000);
+  });
+
+  it('should return raw number values unchanged', () => {
+    expect(parseWindow(1000)).toBe(1000);
+    expect(parseWindow(0)).toBe(0);
+  });
+
+  it('should throw on invalid format', () => {
+    expect(() => parseWindow('invalid')).toThrow('Formato de ventana de rate limit inválido');
+    expect(() => parseWindow('10x')).toThrow();
+    expect(() => parseWindow('abc')).toThrow();
+  });
+
+  it('should handle by: user without auth as anonymous', async () => {
+    const app = new Hono();
+    const options: RateLimitOptions = { limit: 1, window: '5s', by: 'user' };
+    const middleware = createRateLimitMiddleware(options, 'test-route');
+
+    app.onError((err, c) => {
+      const error = err as { statusCode?: number; code?: string; name?: string; message?: string };
+      if (error.statusCode === 429 || error.name === 'TooManyRequestsError') {
+        c.status(429);
+        return c.json({
+          error: error.code ?? 'TOO_MANY_REQUESTS',
+          message: error.message ?? 'Too many requests',
+        });
+      }
+      return c.text('Internal Server Error', 500);
+    });
+
+    app.get('/test', middleware, (c) => c.text('ok'));
+
+    // First request — no auth, should count as anonymous
+    const res1 = await app.request('/test');
+    expect(res1.status).toBe(200);
+    expect(res1.headers.get('X-RateLimit-Remaining')).toBe('0');
+
+    // Second request — no auth, same anonymous key, blocked
+    const res2 = await app.request('/test');
+    expect(res2.status).toBe(429);
   });
 });

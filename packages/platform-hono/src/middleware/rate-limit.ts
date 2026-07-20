@@ -9,7 +9,7 @@ interface RateLimitEntry {
 
 export const _rateLimitStore = new Map<string, RateLimitEntry>();
 
-function parseWindow(window: string | number): number {
+export function parseWindow(window: string | number): number {
   if (typeof window === 'number') {
     return window;
   }
@@ -66,8 +66,10 @@ export function createRateLimitMiddleware(
     if (options.by === 'ip') {
       const forwardedFor = c.req.header('x-forwarded-for');
       const realIp = c.req.header('x-real-ip');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const remoteAddr = (c.env as any)?.incoming?.socket?.remoteAddress; // fallback para entornos Hono genéricos
+      const env = c.env as Record<string, unknown> | undefined;
+      const incoming = env?.incoming as Record<string, unknown> | undefined;
+      const socket = incoming?.socket as Record<string, unknown> | undefined;
+      const remoteAddr = socket?.remoteAddress as string | undefined;
       clientKey = forwardedFor || realIp || remoteAddr || 'ip:unknown';
     } else if (options.by === 'user') {
       const user = c.get('kanji.auth.user') as { id?: string } | undefined;

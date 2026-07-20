@@ -9,6 +9,7 @@ import {
   OPENAPI_SECURITY_KEY,
   OPENAPI_DEPRECATED_KEY,
   OPENAPI_OPERATIONID_KEY,
+  OPENAPI_EXAMPLE_KEY,
 } from './decorators.js';
 import type {
   OpenApiDocument,
@@ -262,6 +263,26 @@ export class OpenApiGenerator {
               };
               operation.responses[statusCode] = res;
             }
+          }
+        }
+
+        const example = Reflect.getMetadata(
+          OPENAPI_EXAMPLE_KEY,
+          controller.prototype,
+          route.propertyKey,
+        );
+
+        if (example !== undefined) {
+          operation.requestBody = operation.requestBody ?? {
+            content: {
+              'application/json': {
+                schema: {},
+              },
+            },
+          };
+          const mediaTypeObj = operation.requestBody.content['application/json'];
+          if (mediaTypeObj) {
+            mediaTypeObj.example = example;
           }
         }
 

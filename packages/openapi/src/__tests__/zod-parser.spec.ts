@@ -129,4 +129,29 @@ describe('Zod Parser', () => {
       description: 'Custom string description',
     });
   });
+
+  it('should parse length checks for string and number', () => {
+    expect(parseZodSchema(z.string().min(5))).toEqual({
+      type: 'string',
+      minLength: 5,
+    });
+    expect(parseZodSchema(z.string().max(10))).toEqual({
+      type: 'string',
+      maxLength: 10,
+    });
+    expect(parseZodSchema(z.string().length(8))).toEqual({
+      type: 'string',
+      minLength: 8,
+      maxLength: 8,
+    });
+
+    expect(parseZodSchema(z.number().min(3))).toEqual({
+      type: 'number',
+      minimum: 3,
+    });
+    expect(parseZodSchema(z.number().max(99))).toEqual({
+      type: 'number',
+      maximum: 99,
+    });
+  });
 });

@@ -8,6 +8,7 @@ import {
   KanjiError,
   ValidationError,
   getExceptionFilterTargets,
+  type ExceptionFilter,
 } from '@kanjijs/common';
 import type { ValidationResult } from '@kanjijs/contracts';
 import { requestIdMiddleware } from './middleware/request-id.js';
@@ -55,7 +56,7 @@ export class KanjijsAdapter {
         const instance = await container.resolve(filterClass, rootModule);
         const targets = getExceptionFilterTargets(filterClass);
         if (targets && instance) {
-          filterService.register(instance as any, targets);
+          filterService.register(instance as ExceptionFilter, targets);
         }
       }
     }
@@ -101,6 +102,14 @@ export class KanjijsAdapter {
       const { cors } = await import('hono/cors');
       const corsConfig = typeof options.cors === 'boolean' ? {} : options.cors;
       app.use('*', cors(corsConfig));
+    }
+
+    // Security Headers
+    if (options.securityHeaders !== false) {
+      const { securityHeadersMiddleware } = await import('./middleware/security-headers.js');
+      const securityHeadersConfig =
+        typeof options.securityHeaders === 'object' ? options.securityHeaders : {};
+      app.use('*', securityHeadersMiddleware(securityHeadersConfig));
     }
 
     // Inject DI Container globally into Hono Context
@@ -270,15 +279,19 @@ export class KanjijsAdapter {
           activeLogger.log(`${gateway.name} {${wsPath}}`, 'WsGatewayResolver');
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const instance = (await container.resolve(gateway, moduleClass)) as Record<
           string | symbol,
-          (...args: any[]) => unknown
+          Function
         >;
         const upgradeHandler = wsHandler.createUpgradeHandler(instance, gateway);
 
-        // Apply controller-level middlewares (e.g. @UseGuards(AuthGuard)) before upgrade
-        const controllerMiddlewares = httpMetadata.controllerMiddlewares.get(gateway) || [];
+        // Apply controller-level middlewares before upgrade:
+        // - @UseGuards(AuthGuard) registers in HttpMetadataStorage
+        // - @UseWsGuards(...) registers in WsMetadataStorage
+        // Merge both so either decorator works for WS gateways
+        const httpGuards = httpMetadata.controllerMiddlewares.get(gateway) || [];
+        const wsGuards = wsMetadata.controllerMiddlewares.get(gateway) || [];
+        const controllerMiddlewares = [...httpGuards, ...wsGuards];
         app.on('GET', [wsPath], ...controllerMiddlewares, upgradeHandler);
 
         if (activeLogger) {

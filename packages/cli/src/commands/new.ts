@@ -1,11 +1,10 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { join, resolve } from 'path';
-import { mkdir, writeFile, readdir, readFile, stat } from 'fs/promises';
-import prompts from 'prompts';
+import { mkdir, writeFile, readFile } from 'fs/promises';
 import { execSync } from 'child_process';
 import { printNextSteps } from '../utils/next-steps.js';
-import { DatabaseType, AuthProvider, CiPlatform, PackageManager, ProjectOptions } from '../types.js';
+import { ProjectOptions } from '../types.js';
 import {
   getPackageJsonTemplate,
   getTsConfigTemplate,
@@ -24,6 +23,10 @@ import { getGitHubActionsTemplate } from '../templates/ci/github-actions.js';
 import { getGitLabCITemplate } from '../templates/ci/gitlab-ci.js';
 import { getAuthModuleTemplate } from '../templates/auth-endpoints.js';
 
+// Import refactored sub-modules
+import { promptProjectOptions } from './new/scaffold.js';
+import { copyTemplate } from './new/template-copier.js';
+
 interface CliNewOptions {
   minimal: boolean;
   db?: string;
@@ -35,59 +38,6 @@ interface CliNewOptions {
   pm?: string;
   install: boolean;
   template?: string;
-}
-
-async function copyTemplate(srcDir: string, destDir: string, version: string) {
-  const entries = await readdir(srcDir);
-
-  for (const entry of entries) {
-    if (entry === 'node_modules' || entry === 'dist' || entry === '.env') {
-      continue;
-    }
-
-    const srcPath = join(srcDir, entry);
-    const destPath = join(destDir, entry);
-    const s = await stat(srcPath);
-
-    if (s.isDirectory()) {
-      await mkdir(destPath, { recursive: true });
-      await copyTemplate(srcPath, destPath, version);
-    } else {
-      if (entry === 'package.json') {
-        const content = await readFile(srcPath, 'utf-8');
-        const pkg = JSON.parse(content);
-
-        // Rename package to match target app name
-        pkg.name = destDir.split('/').pop() || pkg.name;
-
-        const updateDeps = (deps?: Record<string, string>) => {
-          if (!deps) return;
-          for (const key of Object.keys(deps)) {
-            if (key.startsWith('@kanjijs/') && deps[key] === 'workspace:*') {
-              deps[key] = `^${version}`;
-            }
-          }
-        };
-
-        updateDeps(pkg.dependencies);
-        updateDeps(pkg.devDependencies);
-        updateDeps(pkg.peerDependencies);
-
-        await writeFile(destPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
-      } else if (entry === 'tsconfig.json') {
-        const tsconfig = getTsConfigTemplate();
-        await writeFile(destPath, JSON.stringify(tsconfig, null, 2) + '\n', 'utf-8');
-      } else if (entry === '.env.example') {
-        const content = await readFile(srcPath, 'utf-8');
-        await writeFile(destPath, content, 'utf-8');
-        // Also write active .env
-        await writeFile(join(destDir, '.env'), content, 'utf-8');
-      } else {
-        const content = await readFile(srcPath);
-        await writeFile(destPath, content);
-      }
-    }
-  }
 }
 
 export function registerNewCommand(program: Command) {
@@ -105,149 +55,8 @@ export function registerNewCommand(program: Command) {
     .option('--no-install', 'Do not run package manager install automatically')
     .option('-t, --template <name>', 'Template to initialize (starter, basic, saas-starter)')
     .action(async (nameArg: string | undefined, options: CliNewOptions) => {
-      const isInteractive =
-        !options.minimal &&
-        !options.db &&
-        !options.auth &&
-        options.openapi === undefined &&
-        options.docker === undefined &&
-        !options.ci &&
-        options.tests === undefined &&
-        !options.pm &&
-        !options.template;
-
-      let appName = nameArg;
-      let pm = options.pm as PackageManager | undefined;
-      let db = options.db as DatabaseType | undefined;
-      let auth: AuthProvider[] = [];
-      let openapi = options.openapi;
-      let docker = options.docker;
-      let ci = options.ci as CiPlatform | undefined;
-      let tests = options.tests;
-      let template: string | undefined = options.template;
-
-      if (isInteractive) {
-        console.log(pc.cyan('Welcome to the Kanji Framework installer! 🚀\n'));
-
-        const resUseTemplate = await prompts({
-          type: 'select',
-          name: 'useTemplate',
-          message: 'Initialize project from a template?',
-          choices: [
-            { title: 'None (Scaffold custom project)', value: 'none' },
-            { title: 'Starter (Minimal blank API)', value: 'starter' },
-            { title: 'Basic (CRUD with PostgreSQL & Drizzle)', value: 'basic' },
-            { title: 'SaaS Starter (Multi-tenant with auth, teams, policies & E2E tests)', value: 'saas-starter' },
-          ],
-        });
-
-        if (resUseTemplate.useTemplate === undefined) process.exit(0);
-
-        if (resUseTemplate.useTemplate !== 'none') {
-          template = resUseTemplate.useTemplate;
-        }
-
-        if (!appName) {
-          const res = await prompts({
-            type: 'text',
-            name: 'appName',
-            message: 'Application name:',
-            initial: 'my-api',
-            validate: (val: string) => (val.trim().length > 0 ? true : 'App name is required'),
-          });
-          appName = res.appName;
-          if (!appName) process.exit(0);
-        }
-
-        const resPm = await prompts({
-          type: 'select',
-          name: 'pm',
-          message: 'Package manager:',
-          choices: [
-            { title: 'bun', value: 'bun' },
-            { title: 'npm', value: 'npm' },
-            { title: 'pnpm', value: 'pnpm' },
-          ],
-        });
-        pm = resPm.pm;
-        if (!pm) process.exit(0);
-
-        if (!template) {
-          const resDb = await prompts({
-            type: 'select',
-            name: 'db',
-            message: 'Database:',
-            choices: [
-              { title: 'PostgreSQL (Drizzle ORM)', value: 'postgres' },
-              { title: 'MongoDB (Native adapter)', value: 'mongodb' },
-              { title: 'None', value: 'none' },
-            ],
-          });
-          db = resDb.db;
-          if (!db) process.exit(0);
-
-          const resAuth = await prompts({
-            type: 'multiselect',
-            name: 'auth',
-            message: 'Auth providers:',
-            choices: [
-              { title: 'JWT (Local login/refresh)', value: 'jwt' },
-              { title: 'Google (OAuth)', value: 'google' },
-              { title: 'GitHub (OAuth)', value: 'github' },
-              { title: 'Microsoft (OAuth)', value: 'microsoft' },
-            ],
-          });
-          auth = resAuth.auth || [];
-
-          const resOpenapi = await prompts({
-            type: 'confirm',
-            name: 'openapi',
-            message: 'Enable OpenAPI documentation?',
-            initial: true,
-          });
-          openapi = resOpenapi.openapi;
-
-          const resDocker = await prompts({
-            type: 'confirm',
-            name: 'docker',
-            message: 'Generate Docker Compose file?',
-            initial: true,
-          });
-          docker = resDocker.docker;
-
-          const resCi = await prompts({
-            type: 'select',
-            name: 'ci',
-            message: 'CI/CD pipeline:',
-            choices: [
-              { title: 'GitHub Actions', value: 'github' },
-              { title: 'GitLab CI', value: 'gitlab' },
-              { title: 'None', value: 'none' },
-            ],
-          });
-          ci = resCi.ci;
-          if (!ci) process.exit(0);
-
-          const resTests = await prompts({
-            type: 'confirm',
-            name: 'tests',
-            message: 'Generate example tests?',
-            initial: true,
-          });
-          tests = resTests.tests;
-        }
-      } else {
-        appName = nameArg || 'my-api';
-        pm = (options.pm || 'bun') as PackageManager;
-        db = (options.db || 'none') as DatabaseType;
-        auth = options.auth
-          ? (options.auth.split(',').map((s) => s.trim()) as AuthProvider[])
-          : [];
-        openapi = options.openapi ?? false;
-        docker = options.docker ?? false;
-        ci = (options.ci || 'none') as CiPlatform;
-        tests = options.tests ?? false;
-      }
+      const { appName, pm, db, auth, openapi, docker, ci, tests, template } =
+        await promptProjectOptions(nameArg, options);
 
       const targetDir = join(process.cwd(), appName);
 
