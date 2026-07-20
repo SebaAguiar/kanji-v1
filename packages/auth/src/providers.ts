@@ -33,4 +33,26 @@ export const OAuthProviders = {
     userInfoUrl: 'https://graph.microsoft.com/v1.0/me',
     defaultScopes: ['openid', 'email', 'profile', 'User.Read'],
   }),
+
+  x: (clientId: string, clientSecret: string): OAuthProviderConfig => ({
+    id: 'x',
+    name: 'X',
+    clientId,
+    clientSecret,
+    authorizationUrl: 'https://twitter.com/i/oauth2/authorize',
+    tokenUrl: 'https://api.twitter.com/2/oauth2/token',
+    userInfoUrl: 'https://api.twitter.com/2/users/me',
+    defaultScopes: ['tweet.read', 'users.read'],
+  }),
+
+  instagram: (clientId: string, clientSecret: string): OAuthProviderConfig => ({
+    id: 'instagram',
+    name: 'Instagram',
+    clientId,
+    clientSecret,
+    authorizationUrl: 'https://www.facebook.com/v22.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v22.0/oauth/access_token',
+    userInfoUrl: 'https://graph.instagram.com/me',
+    defaultScopes: ['instagram_basic', 'pages_show_list'],
+  }),
 };

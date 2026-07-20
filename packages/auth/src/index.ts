@@ -8,3 +8,5 @@ export * from './auth.module.js';
 export * from './policy.js';
 export * from './state-store.js';
 export * from './oauth.controller.js';
+export * from './credentials.js';
+export * from './email.service.js';
