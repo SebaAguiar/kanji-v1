@@ -1,11 +1,13 @@
 import { Injectable, Inject } from '@kanjijs/core';
 import { WebSocketGateway, WebSocketMessage, WebSocketEvent, UseWsGuards, WebSocketContext } from '@kanjijs/platform-hono';
 import { Contract } from '@kanjijs/contracts';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 import { createWsAuthGuard } from './auth/ws-auth.guard.js';
 import { ChatService } from './chat.service.js';
 import { JoinRoomSchema, LeaveRoomSchema, SendMessageSchema } from './dto/schemas.js';
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-for-example';
+export const JWT_SECRET = env('JWT_SECRET', z.string().default('dev-secret-for-example'));
 
 @Injectable()
 @WebSocketGateway('/chat')

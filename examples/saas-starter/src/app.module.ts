@@ -2,6 +2,8 @@ import { KanjijsModule } from '@kanjijs/core';
 import { StoreModule } from '@kanjijs/store';
 import { AuthModule } from '@kanjijs/auth';
 import { OpenApiModule } from '@kanjijs/openapi';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 import { PolicyModule } from './modules/policy.module.js';
 import { AuthExampleModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
@@ -15,11 +17,11 @@ import * as schema from './database/schema.js';
     StoreModule.forRoot({
       type: 'postgres',
       connectionString:
-        process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/kanji_saas_dev',
+        env('DATABASE_URL', z.string().default('postgres://postgres:postgres@localhost:5432/kanji_saas_dev')),
       schema,
     }),
     AuthModule.forRoot({
-      jwtSecret: process.env.JWT_SECRET || 'dev-secret-key-9988776655',
+      jwtSecret: env('JWT_SECRET', z.string().default('dev-secret-key-9988776655')),
     }),
     OpenApiModule.forRoot({
       title: 'SaaS API',

@@ -10,8 +10,8 @@ import { ${singularCapitalized}Repository } from './${singular}.repository.js';
 
 @KanjijsModule({
   controllers: [${singularCapitalized}Controller],
+  repositories: [${singularCapitalized}Repository],
   providers: [
-    ${singularCapitalized}Repository,
     ${singularCapitalized}Service,
   ],
   exports: [${singularCapitalized}Service],

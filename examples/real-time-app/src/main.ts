@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { KanjijsAdapter } from '@kanjijs/platform-hono';
 import { ZodValidator } from '@kanjijs/contracts';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 import { ChatModule } from './chat.module.js';
 import { JWT_SECRET } from './chat.gateway.js';
 import jwt from 'jsonwebtoken';
@@ -11,7 +13,7 @@ async function bootstrap() {
     requestLogger: true,
   });
 
-  const port = Number(process.env.PORT || 3000);
+  const port = env('PORT', z.coerce.number().default(3000));
 
   // Generate a demo token for testing
   const demoToken = jwt.sign(

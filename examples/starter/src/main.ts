@@ -1,9 +1,11 @@
 import { KanjijsAdapter } from '@kanjijs/platform-hono';
 import { ZodValidator } from '@kanjijs/contracts';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const port = Number(process.env.PORT || 3000);
+  const port = env('PORT', z.coerce.number().default(3000));
   const { app } = await KanjijsAdapter.create(AppModule, {
     validator: new ZodValidator(),
     requestLogger: true,

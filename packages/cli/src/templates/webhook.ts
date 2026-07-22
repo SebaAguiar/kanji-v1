@@ -27,7 +27,7 @@ export type ${capName}Event = z.infer<typeof ${capName}EventSchema>;
   if (opts.auth === 'secret') {
     authLogic = `
     const signature = c.req.header('X-${capName}-Webhook-Secret');
-    const expectedSecret = process.env.${name.toUpperCase()}_WEBHOOK_SECRET;
+    const expectedSecret = env('${name.toUpperCase()}_WEBHOOK_SECRET', z.string());
 
     if (!signature || signature !== expectedSecret) {
       return c.json({ error: 'Unauthorized: invalid webhook secret' }, 401);
@@ -36,7 +36,7 @@ export type ${capName}Event = z.infer<typeof ${capName}EventSchema>;
   } else if (opts.auth === 'signature') {
     authLogic = `
     const signature = c.req.header('X-${capName}-Signature');
-    const secret = process.env.${name.toUpperCase()}_WEBHOOK_SECRET;
+    const secret = env('${name.toUpperCase()}_WEBHOOK_SECRET', z.string());
 
     if (!signature || !secret) {
       return c.json({ error: 'Unauthorized: signature or secret missing' }, 401);
@@ -57,6 +57,8 @@ export type ${capName}Event = z.infer<typeof ${capName}EventSchema>;
 
   const webhook = `import { Controller, Post } from '@kanjijs/platform-hono';
 import { type Context } from 'hono';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 import { ${capName}EventSchema } from './events.js';
 
 @Controller('/webhooks/${name.toLowerCase()}')

@@ -101,15 +101,18 @@ export function getTsConfigTemplate(): object {
 
 export function getMainTsTemplate(): string {
   return `import { KanjijsAdapter } from '@kanjijs/platform-hono';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
+  const port = env('PORT', z.coerce.number().default(3000));
   const { app } = await KanjijsAdapter.create(AppModule);
   
-  console.log('Server is running on http://localhost:3000 🚀');
+  console.log(\`Server is running on http://localhost:\${port} 🚀\`);
   Bun.serve({
     fetch: app.fetch,
-    port: 3000,
+    port,
   });
 }
 
@@ -125,26 +128,29 @@ export function getAppModuleTemplate(opts: ProjectOptions): string {
 
   const moduleImports: string[] = [];
 
+  imports.push("import { env } from '@kanjijs/common';");
+  imports.push("import { z } from 'zod';");
+
   if (opts.db === 'postgres') {
     imports.push("import { StoreModule } from '@kanjijs/store';");
     moduleImports.push(`StoreModule.forRoot({
       type: 'postgres',
       connectionString:
-        process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/kanji_db',
+        env('DATABASE_URL', z.string().default('postgres://postgres:postgres@localhost:5432/kanji_db')),
     })`);
   } else if (opts.db === 'mongodb') {
     imports.push("import { StoreModule } from '@kanjijs/store';");
     moduleImports.push(`StoreModule.forRoot({
       type: 'mongodb',
       connectionString:
-        process.env.DATABASE_URL || 'mongodb://root:password@localhost:27017/kanji_db?authSource=admin',
+        env('DATABASE_URL', z.string().default('mongodb://root:password@localhost:27017/kanji_db?authSource=admin')),
     })`);
   }
 
   if (opts.auth && opts.auth.length > 0) {
     imports.push("import { AuthModule } from '@kanjijs/auth';");
     moduleImports.push(`AuthModule.forRoot({
-      jwtSecret: process.env.JWT_SECRET || 'dev-secret-key-12345',
+      jwtSecret: env('JWT_SECRET', z.string().default('dev-secret-key-12345')),
     })`);
   }
 
@@ -261,9 +267,11 @@ export function getDbSeedTemplate(): string {
   return `import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { users } from './schema/index.js';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
 
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/kanji_db',
+  connectionString: env('DATABASE_URL', z.string().default('postgres://postgres:postgres@localhost:5432/kanji_db')),
 });
 
 const db = drizzle(pool);

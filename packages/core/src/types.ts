@@ -25,6 +25,7 @@ export interface ModuleMetadata {
   imports?: Array<Constructor<object> | DynamicModule>;
   controllers?: Array<Constructor<object>>;
   gateways?: Array<Constructor<object>>;
+  repositories?: Array<Constructor<object>>;
   providers?: Array<Provider<object>>;
   exports?: Array<Token<object>>;
   global?: boolean;
@@ -36,6 +37,7 @@ export interface DynamicModule {
   providers?: Array<Provider<object>>;
   controllers?: Array<Constructor<object>>;
   gateways?: Array<Constructor<object>>;
+  repositories?: Array<Constructor<object>>;
   exports?: Array<Token<object>>;
   global?: boolean;
 }
