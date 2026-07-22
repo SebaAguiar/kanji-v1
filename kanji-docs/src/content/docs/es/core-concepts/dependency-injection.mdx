@@ -1,0 +1,247 @@
+---
+title: Inyección de Dependencias
+description: El contenedor DI determinista de Kanji — cómo se conectan y resuelven los servicios
+---
+
+## Cómo Funciona
+
+Kanji usa un **contenedor DI determinista**. Se crea una instancia por aplicación — sin estado global, sin singletons. Esto significa:
+
+- Cada test obtiene su contenedor aislado
+- Sin dependencias ocultas entre requests
+- Todo el wiring es explícito y verificable al inicio
+
+## Servicios Inyectables
+
+Cualquier clase que deba ser manejada por el contenedor DI necesita el decorador `@Injectable()`:
+
+```typescript
+import { Injectable } from '@kanjijs/core';
+
+@Injectable()
+export class UsersService {
+  constructor(
+    private readonly db: Database,
+  ) {}
+}
+```
+
+Los parámetros del constructor son las dependencias. Kanji las resuelve automáticamente desde el contenedor DI.
+
+**Cómo funciona la resolución:**
+1. Kanji ve que `UsersService` necesita `Database` en su constructor
+2. Busca `Database` en los providers del módulo (o módulos importados/globales)
+3. Si lo encuentra, crea la instancia y la inyecta
+4. Si no lo encuentra, lanza "Provider not found" al inicio
+
+## Tokens de Inyección
+
+Para dependencias que no son clases (valores de configuración, primitivas, interfaces), usá **tokens Symbol**:
+
+```typescript
+import { Inject } from '@kanjijs/core';
+
+const API_KEY = Symbol('API_KEY');
+const MAX_RETRIES = Symbol('MAX_RETRIES');
+
+@Injectable()
+export class ExternalService {
+  constructor(
+    @Inject(API_KEY) private readonly apiKey: string,
+    @Inject(MAX_RETRIES) private readonly retries: number,
+  ) {}
+}
+```
+
+Registrá los valores en el módulo:
+
+```typescript
+@KanjijsModule({
+  providers: [
+    ExternalService,
+    { provide: API_KEY, useValue: 'sk-12345' },
+    { provide: MAX_RETRIES, useValue: 3 },
+  ],
+})
+export class ExternalModule {}
+```
+
+### ¿Por qué Symbol, no String?
+
+```typescript
+// ❌ Mal — los strings pueden colisionar
+const API_KEY = 'API_KEY';
+
+// ✅ Bien — Symbols son únicos
+const API_KEY = Symbol('API_KEY');
+```
+
+Si dos módulos definen `'API_KEY'` como token string, colisionarían. Los Symbols son únicos garantizados.
+
+## Tipos de Providers
+
+Kanji soporta cuatro tipos de providers:
+
+### 1. Providers de Clase (el más común)
+
+La clase ES el provider. Kanji crea una nueva instancia.
+
+```typescript
+@KanjijsModule({
+  providers: [UsersService],  // Kanji crea UsersService via new UsersService(...)
+})
+export class UsersModule {}
+```
+
+### 2. Providers de Valor (configuración, constantes)
+
+Inyectá un valor pre-definido.
+
+```typescript
+providers: [
+  { provide: APP_CONFIG, useValue: { port: 3000, env: 'production' } },
+]
+```
+
+### 3. Providers de Referencia de Clase (cuando la clase difiere del token)
+
+Usá una clase diferente para satisfacer un token.
+
+```typescript
+providers: [
+  { provide: Logger, useClass: ConsoleLogger },
+]
+```
+
+### 4. Providers de Fábrica (inicialización asíncrona, ej: conexiones de DB)
+
+Creá un valor asíncronamente. Perfecto para conexiones de base de datos, clientes de cache, etc.
+
+```typescript
+providers: [
+  {
+    provide: DATABASE_CLIENT,
+    useFactory: async () => {
+      const client = postgres(process.env.DATABASE_URL!);
+      return drizzle(client);
+    },
+  },
+]
+```
+
+## Inyección por Constructor
+
+El patrón estándar. Las dependencias van en el constructor:
+
+```typescript
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(DATABASE_CLIENT) private db: Database,
+    @Inject(MAIL_SERVICE) private mail: MailService,
+  ) {}
+}
+```
+
+**Reglas:**
+- Usá `@Inject(TOKEN)` para tokens Symbol
+- Los tokens de clase no necesitan `@Inject` — Kanji los resuelve por tipo
+- Mantén los parámetros del constructor al mínimo (3-4 max). Si necesitás más, tu servicio está haciendo demasiado.
+
+## Ámbito de los Providers
+
+Los providers son **privados de su módulo** por defecto. Para hacer un provider disponible a otros módulos, debés exportarlo explícitamente:
+
+```typescript
+@KanjijsModule({
+  providers: [DatabaseService],
+  exports: [DatabaseService],  // Ahora los importadores pueden inyectar DatabaseService
+})
+export class DatabaseModule {}
+```
+
+Sin `exports`, cualquier módulo que intente inyectar `DatabaseService` fallará con "Provider not found."
+
+## Orden de Resolución de Dependencias
+
+Cuando Kanji construye el contenedor:
+
+1. **Recolecta todos los módulos** desde los imports de `app.module.ts` (recursivamente)
+2. **Registra providers** de cada módulo (locales + exports importados + globales)
+3. **Resuelve dependencias** — para cada provider, resuelve sus parámetros de constructor
+4. **Detecta ciclos** — si la resolución hace loop, lanza error de dependencia circular
+5. **Crea instancias** — instancia todos los providers en orden de dependencia
+
+Todo esto pasa al **inicio**, no por-request. Si falta alguna dependencia, la app no arranca.
+
+## Detección de Dependencias Circulares
+
+Kanji detecta dependencias circulares al inicio. Si el Módulo A depende del Módulo B que depende del Módulo A, verás:
+
+```
+Error: Circular dependency detected between ModuleA and ModuleB
+```
+
+**Cómo arreglarlo:**
+
+```typescript
+// Opción 1: Extraer provider compartido a un tercer módulo
+@KanjijsModule({ exports: [SharedService] })
+class SharedModule {}
+
+// Opción 2: Usar forwardRef (último recurso)
+@Injectable()
+class ServiceA {
+  constructor(@Inject(forwardRef(() => ServiceB)) private b: ServiceB) {}
+}
+```
+
+## Patrones Comunes
+
+### Inyectar la Base de Datos
+
+```typescript
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+
+@Injectable()
+export class UsersService {
+  constructor(@Inject(DATABASE_CLIENT) private db: Database) {}
+}
+```
+
+### Inyectar Configuración
+
+```typescript
+const MAIL_CONFIG = Symbol('MAIL_CONFIG');
+
+@Injectable()
+export class MailService {
+  constructor(@Inject(MAIL_CONFIG) private config: MailConfig) {}
+}
+
+// En el módulo:
+providers: [
+  { provide: MAIL_CONFIG, useValue: { host: 'smtp.example.com', port: 587 } },
+  MailService,
+]
+```
+
+### Inyectar Otro Servicio
+
+```typescript
+@Injectable()
+export class PostsService {
+  constructor(private readonly usersService: UsersService) {}
+  // Sin @Inject — Kanji resuelve por tipo de clase
+}
+```
+
+## Errores Comunes
+
+| Error | Síntoma | Solución |
+|---|---|---|
+| Falta `@Injectable()` | "Cannot resolve dependency" | Agregá el decorador `@Injectable()` |
+| Falta `@Inject(TOKEN)` | Inyecta `undefined` | Agregá `@Inject()` para tokens Symbol |
+| No exportar provider | "Provider not found" en módulo importador | Agregá al array `exports` |
+| Auto-registration | Provider not found (no soportado) | Declará en `providers` del módulo |
+| Demasiados params de constructor | Difícil de testear, acoplamiento fuerte | Dividí en servicios más chicos |

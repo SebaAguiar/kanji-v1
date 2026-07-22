@@ -1,0 +1,525 @@
+---
+title: Database
+description: PostgreSQL and MongoDB integration — schema, queries, and the common Database interface
+---
+
+## Overview
+
+Kanji supports two database adapters via `@kanjijs/store`:
+
+- **PostgreSQL** via Drizzle ORM — Recommended for most projects
+- **MongoDB** via native adapter — For document-oriented data
+
+Both share a common `Database` and `QueryBuilder` interface. Services written with the common API work on **either database** without changes.
+
+## PostgreSQL Setup
+
+### 1. Install Dependencies
+
+```bash
+bun add drizzle-orm postgres
+bun add -d drizzle-kit @types/pg
+```
+
+### 2. Configure StoreModule
+
+```typescript
+// src/app.module.ts
+import { KanjijsModule } from '@kanjijs/core';
+import { StoreModule } from '@kanjijs/store';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
+import { users, posts } from './database/schema';
+
+@KanjijsModule({
+  imports: [
+    StoreModule.forRoot({
+      type: 'postgres',
+      connectionString: env('DATABASE_URL', z.string().url()),
+      schema: { users, posts },  // Drizzle table objects — required for Postgres
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+:::caution[Schema is required for Postgres]
+The `schema` object maps table names to Drizzle table definitions. Without it, `db.query.users` won't know which table to query. MongoDB doesn't need this — collection names are inferred from the query.
+:::
+
+### 3. Define Your Schema
+
+```typescript
+// src/database/schema.ts
+import { pgTable, uuid, varchar, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 256 }).notNull(),
+  email: varchar('email', { length: 256 }).notNull().unique(),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const posts = pgTable('posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 512 }).notNull(),
+  content: text('content'),
+  published: boolean('published').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Infer types from Drizzle schema — no manual interfaces
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+```
+
+### 4. Generate Migrations
+
+```bash
+kanji migrate:generate    # Creates migration file from schema changes
+kanji migrate             # Apply pending migrations
+```
+
+## MongoDB Setup
+
+### 1. Configure StoreModule
+
+```typescript
+StoreModule.forRoot({
+  type: 'mongodb',
+  connectionString: env('MONGODB_URI', z.string().url()),
+  dbName: env('MONGODB_DB', z.string()),
+})
+```
+
+No `schema` parameter needed. Collection names are inferred from `db.query.collectionName`.
+
+### 2. Define TypeScript Interfaces
+
+MongoDB doesn't use Drizzle schemas. Define your document shapes in TypeScript:
+
+```typescript
+// src/database/types.ts
+export interface UserDocument {
+  id: string;         // Maps to _id automatically
+  name: string;
+  email: string;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PostDocument {
+  id: string;
+  userId: string;
+  title: string;
+  content?: string;
+  published: boolean;
+  createdAt: Date;
+}
+```
+
+### MongoDB-Specific Behavior
+
+The adapter handles these automatically:
+
+- **`id` ↔ `_id` mapping** — Always use `id` in your code. The adapter converts to/from MongoDB's `_id` transparently.
+- **ObjectId conversion** — 24-character hex strings passed in `where()` are auto-converted to `ObjectId`.
+- **Lazy connection** — MongoDB connects on first query, not at startup.
+- **No `RETURNING`** — MongoDB insert/update/delete don't return affected rows the same way. The adapter re-fetches documents after mutation to simulate `returning()` behavior.
+
+## Querying — Common API
+
+Both adapters implement the same `QueryBuilder` interface. This code works on **both** PostgreSQL and MongoDB:
+
+```typescript
+import { Injectable, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+
+@Injectable()
+export class UsersService {
+  constructor(@Inject(DATABASE_CLIENT) private db: Database) {}
+
+  // SELECT — find all
+  async findAll() {
+    return this.db.query.users.select();
+  }
+
+  // SELECT — find by ID
+  async findById(id: string) {
+    return this.db.query.users.findById(id);
+  }
+
+  // SELECT — find by field
+  async findByEmail(email: string) {
+    return this.db.query.users.findBy({ email });
+  }
+
+  // SELECT — with filters, pagination, sorting
+  async findActive(page: number, limit: number) {
+    const offset = (page - 1) * limit;
+    return this.db.query.users
+      .select()
+      .where({ active: true })
+      .limit(limit)
+      .offset(offset)
+      .orderBy('createdAt', 'desc');
+  }
+
+  // SELECT — specific fields
+  async findNames() {
+    return this.db.query.users.select(['name', 'email']);
+  }
+
+  // INSERT — single
+  async create(data: { name: string; email: string }) {
+    const [user] = await this.db.query.users.insert(data);
+    return user;
+  }
+
+  // INSERT — bulk
+  async createMany(users: Array<{ name: string; email: string }>) {
+    return this.db.query.users.insert(users);
+  }
+
+  // UPDATE
+  async update(id: string, data: { name?: string }) {
+    const [updated] = await this.db.query.users
+      .where({ id })
+      .update(data);
+    return updated || null;
+  }
+
+  // DELETE
+  async delete(id: string) {
+    const results = await this.db.query.users.where({ id }).delete();
+    return results.length > 0;
+  }
+
+  // TRANSACTION
+  async transferData(fromId: string, toId: string) {
+    return this.db.transaction(async (trx) => {
+      const [from] = await trx.query.users.where({ id: fromId }).update({ active: false });
+      const [to] = await trx.query.users.where({ id: toId }).update({ active: true });
+      return { from, to };
+    });
+  }
+}
+```
+
+### QueryBuilder API Reference
+
+| Method | Description | Example |
+|---|---|---|
+| `.select()` | Get all records | `db.query.users.select()` |
+| `.select(['field'])` | Get specific fields | `db.query.users.select(['name'])` |
+| `.findById(id)` | Find by primary key | `db.query.users.findById('abc')` |
+| `.findBy({ field: value })` | Find by field | `db.query.users.findBy({ email: 'a@b.com' })` |
+| `.where({ field: value })` | Filter records | `db.query.users.where({ active: true })` |
+| `.limit(n)` | Limit results | `.limit(10)` |
+| `.offset(n)` | Skip results | `.offset(20)` |
+| `.orderBy(field, dir)` | Sort results | `.orderBy('createdAt', 'desc')` |
+| `.insert(data)` | Insert record(s) | `db.query.users.insert({ name: 'Alice' })` |
+| `.where({}).update(data)` | Update records | `.where({ id }).update({ name: 'Bob' })` |
+| `.where({}).delete()` | Delete records | `.where({ id }).delete()` |
+| `.transaction(fn)` | Run in transaction | `db.transaction(async (trx) => { ... })` |
+
+:::note[Where clause is intentionally simple]
+The `where()` method accepts plain objects: `{ field: value }`. This works identically on both Postgres and MongoDB. For complex queries (OR, LIKE, nested conditions), use the `raw()` method with database-specific syntax.
+:::
+
+## Repository Pattern
+
+Kanji uses the **Repository Pattern** to separate data access logic from business logic. The CLI generates repositories automatically when you scaffold a resource with `kanji g resource`.
+
+### Architecture Flow
+
+```
+Controller → Service → Repository → Database
+  (HTTP)     (business)  (data access)  (Postgres/MongoDB)
+```
+
+Each layer has a single responsibility:
+
+| Layer | Decorator | Responsibility |
+|---|---|---|
+| **Controller** | `@Controller()` | HTTP routing, request/response, validation |
+| **Service** | `@Injectable()` | Business logic, orchestration |
+| **Repository** | `@Repository()` | Data access, queries, mutations |
+
+### Creating a Repository
+
+The `@Repository()` decorator marks a class as a data access provider. It's semantically identical to `@Injectable()` but communicates database responsibility.
+
+```typescript
+// src/products/product.repository.ts
+import { Repository, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT, type Database } from '@kanjijs/store';
+import type { ProductResponse, CreateProductInput } from './product.contracts.js';
+
+@Repository()
+export class ProductRepository {
+  constructor(
+    @Inject(DATABASE_CLIENT)
+    private readonly db: Database,
+  ) {}
+
+  async create(input: CreateProductInput): Promise<ProductResponse> {
+    const id = crypto.randomUUID();
+    await this.db.query.products.insert({ id, ...input });
+    return { id, ...input };
+  }
+
+  async findAll(): Promise<ProductResponse[]> {
+    return this.db.query.products.select() as Promise<ProductResponse[]>;
+  }
+
+  async findOne(id: string): Promise<ProductResponse | null> {
+    const result = await this.db.query.products.findById(id);
+    return result as ProductResponse | null;
+  }
+
+  async update(id: string, input: Partial<CreateProductInput>): Promise<ProductResponse> {
+    await this.db.query.products.where({ id }).update(input);
+    return { id, ...input } as ProductResponse;
+  }
+
+  async delete(id: string): Promise<{ success: boolean }> {
+    await this.db.query.products.where({ id }).delete();
+    return { success: true };
+  }
+}
+```
+
+### Registering in the Module
+
+Repositories go in the `repositories` array of the module — separate from `providers` for semantic clarity:
+
+```typescript
+// src/products/product.module.ts
+import { KanjijsModule } from '@kanjijs/core';
+import { ProductController } from './product.controller.js';
+import { ProductService } from './product.service.js';
+import { ProductRepository } from './product.repository.js';
+
+@KanjijsModule({
+  controllers: [ProductController],
+  repositories: [ProductRepository],   // data access
+  providers: [ProductService],         // business logic
+  exports: [ProductService],
+})
+export class ProductModule {}
+```
+
+### Service Injects Repository
+
+Services never touch the database directly — they delegate to the repository:
+
+```typescript
+// src/products/product.service.ts
+import { Injectable } from '@kanjijs/core';
+import { ProductRepository } from './product.repository.js';
+import type { ProductResponse, CreateProductInput } from './product.contracts.js';
+
+@Injectable()
+export class ProductService {
+  constructor(private readonly repository: ProductRepository) {}
+
+  async create(input: CreateProductInput): Promise<ProductResponse> {
+    // Business logic goes here (validation, side effects, etc.)
+    return this.repository.create(input);
+  }
+
+  async findAll(): Promise<ProductResponse[]> {
+    return this.repository.findAll();
+  }
+
+  async findOne(id: string): Promise<ProductResponse | null> {
+    return this.repository.findOne(id);
+  }
+}
+```
+
+### Generating with the CLI
+
+The `kanji g resource` command generates the full Controller → Service → Repository stack:
+
+```bash
+kanji g resource products --db=postgres --crud=create,findAll,findOne,update,delete
+```
+
+This creates:
+
+```
+src/products/
+├── product.module.ts        # Module with all three registered
+├── product.controller.ts    # HTTP handlers
+├── product.service.ts       # Business logic (injects Repository)
+├── product.repository.ts    # Data access (injects Database)
+├── product.contracts.ts     # Zod schemas for validation
+├── product.policy.ts        # Authorization rules
+└── index.ts                 # Barrel exports
+```
+
+### Repository vs Direct QueryBuilder in Service
+
+| Approach | When to use |
+|---|---|
+| **Repository pattern** | Most projects — clean separation, testable, swappable |
+| **Direct `@Inject(DATABASE_CLIENT)` in Service** | Simple CRUD with no business logic, or when the service IS the data layer |
+
+:::tip[Rule of thumb]
+If your service has more than 2-3 methods that just forward to `this.db.query.*`, extract a repository. The service should contain business logic, not SQL/NoSQL plumbing.
+:::
+
+### MongoDB Repository
+
+The same pattern works with MongoDB — only the query syntax changes:
+
+```typescript
+@Repository()
+export class ProductRepository {
+  constructor(
+    @Inject(DATABASE_CLIENT)
+    private readonly db: Database,
+  ) {}
+
+  async create(input: CreateProductInput): Promise<ProductResponse> {
+    const id = crypto.randomUUID();
+    await this.db.collection('products').insertOne({ _id: id, ...input });
+    return { id, ...input };
+  }
+
+  async findAll(): Promise<ProductResponse[]> {
+    const docs = await this.db.collection('products').find().toArray();
+    return docs.map(doc => ({ id: doc._id.toString(), ...doc })) as ProductResponse[];
+  }
+}
+```
+
+## PostgreSQL-Only Queries (Drizzle)
+
+When you need Drizzle-specific features (complex joins, aggregations, subqueries), you can use Drizzle directly:
+
+```typescript
+import { Injectable, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT } from '@kanjijs/store';
+import { eq, and, count, desc, like } from 'drizzle-orm';
+import { users, posts } from '../../database/schema';
+
+@Injectable()
+export class UsersServicePostgres {
+  constructor(@Inject(DATABASE_CLIENT) private db: PostgresJsDatabase<Record<string, never>>) {}
+
+  // Complex join
+  async findWithPosts(userId: string) {
+    return this.db.select()
+      .from(users)
+      .leftJoin(posts, eq(posts.userId, users.id))
+      .where(eq(users.id, userId));
+  }
+
+  // Aggregation
+  async countByRole() {
+    return this.db.select({
+      role: users.role,
+      count: count(),
+    }).from(users).groupBy(users.role);
+  }
+
+  // Complex filter
+  async search(term: string) {
+    return this.db.select().from(users)
+      .where(and(
+        eq(users.active, true),
+        like(users.name, `%${term}%`),
+      ))
+      .orderBy(desc(users.createdAt));
+  }
+}
+```
+
+:::warning[Database portability]
+Drizzle-specific queries will NOT work with MongoDB. Use the common QueryBuilder API for services that may need to support both databases.
+:::
+
+## Avoiding N+1 Queries
+
+The N+1 problem occurs when you load related entities in a loop:
+
+```typescript
+// ❌ BAD: N+1 queries — 1 query for users + N queries for posts
+const users = await this.db.query.users.select();
+for (const user of users) {
+  user.posts = await this.db.query.posts.where({ userId: user.id }).select();
+}
+
+// ✅ GOOD (Postgres): Single query with join
+const results = await this.db.select()
+  .from(users)
+  .leftJoin(posts, eq(posts.userId, users.id));
+
+// ✅ GOOD (Database-agnostic): Batch fetch
+const userIds = users.map(u => u.id);
+const allPosts = await this.db.query.posts
+  .select()
+  .where({ userId: userIds[0] });  // Use raw() for $in queries
+
+// ✅ GOOD (parallel): Fetch per-user concurrently
+const postsByUser = await Promise.all(
+  users.map(u => this.db.query.posts.where({ userId: u.id }).select())
+);
+```
+
+## Switching Between Databases
+
+The only change is in `app.module.ts` — swap the `StoreModule.forRoot()` config:
+
+```typescript
+// PostgreSQL
+StoreModule.forRoot({
+  type: 'postgres',
+  connectionString: env('DATABASE_URL', z.string().url()),
+  schema: { users, posts },
+})
+
+// MongoDB (same service code works!)
+StoreModule.forRoot({
+  type: 'mongodb',
+  connectionString: env('MONGODB_URI', z.string().url()),
+  dbName: env('MONGODB_DB', z.string()),
+})
+```
+
+Service code using the common QueryBuilder API requires **zero changes**.
+
+## Migrations
+
+```bash
+kanji migrate               # Run pending migrations
+kanji migrate:status        # Check migration status
+kanji migrate:rollback      # Rollback last migration
+kanji migrate:generate      # Generate new migration from schema changes
+kanji db:push               # Push schema directly (dev only)
+kanji db:studio             # Open Drizzle Studio (visual DB browser)
+```
+
+:::caution[Migration ordering]
+Never edit a committed migration. Always create a new one. Out-of-order migrations cause "relation already exists" errors.
+:::
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| Missing `schema` in Postgres config | `Table 'x' not found in Drizzle schema` | Pass `schema` object to `StoreModule.forRoot()` |
+| Using `id` vs `_id` in MongoDB | Query returns data with `_id` instead of `id` | Use `id` in your code — adapter maps automatically |
+| Drizzle imports with MongoDB | `eq is not a function` | Use common QueryBuilder API, not Drizzle imports |
+| N+1 queries | Endpoint slow despite small data | Use joins (Postgres) or batch fetch (both) |
+| Editing committed migrations | "relation already exists" | Create a new migration instead |
+| No transaction for multi-step ops | Partial data on failure | Use `db.transaction()` |

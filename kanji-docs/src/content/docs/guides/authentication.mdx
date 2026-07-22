@@ -1,0 +1,285 @@
+---
+title: Authentication
+description: JWT sessions, OAuth providers, RBAC, ACL — everything you need to secure your API
+---
+
+## Overview
+
+Kanji includes built-in authentication with zero external dependencies:
+
+- **JWT sessions** — Stateless tokens with secret rotation support
+- **OAuth 2.0** — Google, GitHub, Microsoft providers (auto-configured routes)
+- **RBAC** — Role-Based Access Control via CLP (Class-Level Permissions)
+- **ACL** — Object-Level Permissions via resource policies
+
+No Passport. No adapters. No extra packages.
+
+## Setup
+
+### 1. Configure AuthModule
+
+```typescript
+// src/app.module.ts
+import { KanjijsModule } from '@kanjijs/core';
+import { AuthModule } from '@kanjijs/auth';
+import { env, assertEnvValid } from '@kanjijs/common';
+import { z } from 'zod';
+
+@KanjijsModule({
+  imports: [
+    AuthModule.forRoot({
+      // Required: JWT secret for signing tokens (min 32 chars)
+      jwtSecret: env('JWT_SECRET', z.string().min(32)),
+
+      // Optional: previous secrets for zero-downtime rotation
+      previousSecrets: env('PREVIOUS_JWT_SECRETS', z.string().optional())
+        ?.split(',')
+        .filter(Boolean) ?? [],
+
+      // OAuth providers (optional — only configure what you need)
+      providers: {
+        github: {
+          clientId: env('GITHUB_CLIENT_ID', z.string()),
+          clientSecret: env('GITHUB_CLIENT_SECRET', z.string()),
+        },
+        google: {
+          clientId: env('GOOGLE_CLIENT_ID', z.string()),
+          clientSecret: env('GOOGLE_CLIENT_SECRET', z.string()),
+        },
+        microsoft: {
+          clientId: env('MICROSOFT_CLIENT_ID', z.string()),
+          clientSecret: env('MICROSOFT_CLIENT_SECRET', z.string()),
+        },
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### 2. Environment Variables
+
+```bash
+# Required
+JWT_SECRET=your-secret-key-min-32-chars-long
+
+# Optional — for zero-downtime rotation
+PREVIOUS_JWT_SECRETS=old-secret-1,old-secret-2
+
+# OAuth (configure only what you need)
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+
+## How Auth Works
+
+1. Client sends request with `Authorization: Bearer <jwt-token>` header
+2. Auth middleware extracts the token
+3. Verifies signature against `jwtSecret` (or `previousSecrets` during rotation)
+4. Decodes the payload into a session object
+5. Stores session in context — available to your handlers
+
+## Accessing the Authenticated User
+
+After auth middleware runs, the session is available via context keys:
+
+```typescript
+@c.get('kanji.auth.user')      // { id: string, email: string, name: string }
+@c.get('kanji.auth.session')   // Full KanjiSession object
+@c.get('kanji.auth.roles')     // string[] — user's roles
+@c.get('kanji.auth.scopes')    // string[] — OAuth scopes
+@c.get('kanji.auth.principal') // Normalized identity object
+```
+
+## Protecting Routes
+
+### Controller-Level (all routes in controller)
+
+```typescript
+import { Controller, Get } from '@kanjijs/platform-hono';
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard } from '@kanjijs/auth';
+import { Context } from 'hono';
+
+@Controller('/users')
+@UseGuards(AuthGuard)  // All routes in this controller require auth
+export class UsersController {
+  @Get('/me')
+  async getProfile(c: Context) {
+    const user = c.get('kanji.auth.user');
+    return c.json(user);
+  }
+}
+```
+
+### Route-Level (specific routes only)
+
+```typescript
+@Controller('/posts')
+export class PostsController {
+  @Get('/')
+  @Contract(ListPostsContract)
+  async list(c: Context) {
+    // Public — no auth needed
+    return c.json(await this.postsService.findAll());
+  }
+
+  @Post('/')
+  @UseGuards(AuthGuard)  // Only this route requires auth
+  @Contract(CreatePostContract)
+  async create(c: Context) {
+    const user = c.get('kanji.auth.user');
+    const body = c.get('kanji.validated.body');
+    return c.json(await this.postsService.create(body, user.id), 201);
+  }
+}
+```
+
+## RBAC with CLP (Class-Level Permissions)
+
+Restrict entire controllers or routes by user roles:
+
+```typescript
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard, clp } from '@kanjijs/auth';
+
+@Controller('/admin')
+@UseGuards(AuthGuard, clp({ roles: ['admin'] }))
+export class AdminController {
+  // Only users with 'admin' role can access ANY route here
+
+  @Get('/users')
+  async listUsers(c: Context) { /* ... */ }
+
+  @Delete('/users/:id')
+  async deleteUser(c: Context) { /* ... */ }
+}
+```
+
+### How CLP Works
+
+1. After `AuthGuard` resolves the user, `clp()` checks `c.get('kanji.auth.roles')`
+2. If the user has none of the specified roles, the request is rejected with 403
+3. The handler never runs
+
+### Multiple Roles
+
+```typescript
+clp({ roles: ['admin', 'moderator'] })  // Either role is sufficient
+```
+
+## ACL with Resource Policies
+
+Object-level permissions — check if a user can access a **specific** resource:
+
+```typescript
+import { Injectable } from '@kanjijs/core';
+import type { ResourcePolicy, AuthContext, KanjiSession } from '@kanjijs/auth';
+
+@Injectable()
+export class PostPolicy implements ResourcePolicy {
+  canRead(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Anyone can read published posts
+    return resource.published || resource.userId === user.id;
+  }
+
+  canUpdate(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Owner or admin can update
+    return resource.userId === user.id || user.roles.includes('admin');
+  }
+
+  canDelete(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Only admin can delete
+    return user.roles.includes('admin');
+  }
+}
+```
+
+### Using ACL in Controllers
+
+```typescript
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard, acl } from '@kanjijs/auth';
+
+@Controller('/posts')
+export class PostsController {
+  @Put('/:id')
+  @UseGuards(AuthGuard, acl({ policy: PostPolicy }))
+  @Contract(UpdatePostContract)
+  async update(c: Context) {
+    // PostPolicy.canUpdate() is checked before execution
+    // If it returns false → 403 Forbidden
+    const { id } = c.get('kanji.validated.params');
+    const body = c.get('kanji.validated.body');
+    return c.json(await this.postsService.update(id, body));
+  }
+}
+```
+
+## OAuth Routes
+
+When you configure OAuth providers, Kanji auto-generates these routes:
+
+```
+GET  /auth/github           → Redirect to GitHub login
+GET  /auth/github/callback  → Handle GitHub callback, create JWT
+GET  /auth/google           → Redirect to Google login
+GET  /auth/google/callback  → Handle Google callback, create JWT
+GET  /auth/microsoft        → Redirect to Microsoft login
+GET  /auth/microsoft/callback → Handle Microsoft callback, create JWT
+```
+
+**Flow:**
+1. Frontend redirects user to `/auth/github`
+2. User authorizes on GitHub
+3. GitHub redirects to `/auth/github/callback`
+4. Kanji exchanges code for tokens, fetches user profile
+5. Creates JWT session, redirects to frontend with token
+
+## JWT Secret Rotation
+
+Rotate secrets without logging out users:
+
+1. Move current `jwtSecret` to `previousSecrets`
+2. Set new `jwtSecret`
+3. Deploy
+
+```bash
+# Before rotation
+JWT_SECRET=old-secret-1234567890123456
+PREVIOUS_JWT_SECRETS=
+
+# After rotation
+JWT_SECRET=new-secret-1234567890123456
+PREVIOUS_JWT_SECRETS=old-secret-1234567890123456
+```
+
+Old tokens continue working until they expire. New tokens use the new secret.
+
+:::tip[Rotation strategy]
+Rotate secrets every 90 days. Old tokens expire naturally. No user disruption.
+:::
+
+## Auth Context Keys Reference
+
+| Key | Type | Description |
+|---|---|---|
+| `kanji.auth.user` | `{ id: string, email: string, name: string }` | Basic user info |
+| `kanji.auth.session` | `KanjiSession` | Full session object |
+| `kanji.auth.roles` | `string[]` | User's roles |
+| `kanji.auth.scopes` | `string[]` | OAuth scopes |
+| `kanji.auth.principal` | `Principal` | Normalized identity |
+| `kanji.authz.cache` | `Map<string, Decision>` | ACL cache per request |
+| `kanji.authz.decision` | `Decision` | Last ACL decision (debugging) |
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| Missing `@UseGuards(AuthGuard)` | Route accessible without auth | Add guard to route or controller |
+| Wrong context key | `c.get('kanji.user')` returns undefined | Use `kanji.auth.user` |
+| Short JWT_SECRET | Tokens work in dev, fail in prod | Minimum 32 characters |
+| No `previousSecrets` during rotation | Users logged out on deploy | Add old secret to `previousSecrets` |
+| Forgetting OAuth callback URL | OAuth login fails | Register callback URL with provider |

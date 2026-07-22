@@ -1,0 +1,40 @@
+---
+title: Kanji Framework
+description: Framework backend para Bun con Hono, DI, ORM nativo, Auth y generación de SDK
+template: splash
+hero:
+  tagline: Velocidad sin compromiso. Seguridad por defecto. Modular por diseño.
+  actions:
+    - text: Primeros Pasos
+      link: /es/getting-started/installation
+      icon: right-arrow
+    - text: Ver en GitHub
+      link: https://github.com/your-org/kanji-v1
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Características
+
+<CardGrid stagger>
+	<Card title="Arquitectura Modular" icon="puzzle">
+		Contenedor DI determinista con módulos dinámicos. Límites estrictos, sin magia.
+	</Card>
+	<Card title="Contract-First" icon="document">
+		Define APIs con esquemas Zod. Los tipos fluyen de punta a punta.
+	</Card>
+	<Card title="Multi-Base de Datos" icon="database">
+		Adaptadores PostgreSQL (Drizzle ORM) y MongoDB con interfaz común.
+	</Card>
+	<Card title="Auth Integrado" icon="seti:lock">
+		Sesiones JWT, OAuth 2.0 (Google, GitHub, Microsoft), guards RBAC y ACL.
+	</Card>
+	<Card title="Tiempo Real" icon="star">
+		WebSockets de primera clase con integración de auth y validación de contratos.
+	</Card>
+	<Card title="SDK Type-safe" icon="typescript">
+		Client TypeScript auto-generado desde tu spec OpenAPI.
+	</Card>
+</CardGrid>

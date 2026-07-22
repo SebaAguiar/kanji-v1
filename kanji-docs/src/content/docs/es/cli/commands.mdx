@@ -1,0 +1,266 @@
+---
+title: Comandos
+description: Referencia completa de comandos CLI con todas las opciones
+---
+
+## kanji new
+
+Crear un nuevo proyecto Kanji desde un template.
+
+```bash
+kanji new <nombre-del-proyecto> [opciones]
+```
+
+| Opción | Descripción | Valor por defecto |
+|---|---|---|
+| `--template <nombre>` | Template del proyecto: `starter`, `basic`, `saas-starter` | `basic` |
+| `--db <adaptador>` | Adaptador de base de datos: `postgres`, `mongodb` | `postgres` |
+
+**Ejemplos:**
+
+```bash
+kanji new my-api                           # Template básico con Postgres
+kanji new my-api --template saas-starter   # Template SaaS con multi-tenancy
+kanji new my-api --db mongodb              # Template básico con MongoDB
+```
+
+**Qué crea:**
+
+```
+my-api/
+├── src/
+│   ├── database/
+│   │   ├── schema.ts
+│   │   └── migrations/
+│   ├── modules/
+│   │   └── users/
+│   │       ├── users.contracts.ts
+│   │       ├── users.controller.ts
+│   │       ├── users.service.ts
+│   │       └── users.module.ts
+│   ├── app.module.ts
+│   └── main.ts
+├── package.json
+├── tsconfig.json
+└── kanji.config.ts
+```
+
+## kanji dev
+
+Iniciar el servidor de desarrollo con hot reload.
+
+```bash
+kanji dev [opciones]
+```
+
+| Opción | Descripción | Valor por defecto |
+|---|---|---|
+| `--port <número>` | Puerto del servidor | `3000` |
+| `--host <string>` | Host al que bindear | `localhost` |
+
+**Ejemplos:**
+
+```bash
+kanji dev                    # http://localhost:3000
+kanji dev --port 8080        # http://localhost:8080
+kanji dev --host 0.0.0.0     # Accesible desde la red
+```
+
+**Modo background:**
+
+```bash
+kanji dev --background       # Iniciar en segundo plano
+kanji dev stop               # Detener el servidor en background
+kanji dev status             # Verificar si está corriendo
+kanji dev logs               # Ver logs
+```
+
+## kanji g / kanji generate
+
+Generar scaffolding de código.
+
+```bash
+kanji g <tipo> <nombre> [opciones]
+```
+
+### Resource (Módulo CRUD)
+
+```bash
+kanji g resource <nombre> [opciones]
+```
+
+| Opción | Descripción | Valor por defecto |
+|---|---|---|
+| `--dry-run` | Previsualizar archivos sin crearlos | `false` |
+| `--force` | Sobreescribir archivos existentes | `false` |
+
+**Qué genera:**
+
+- `<nombre>.contracts.ts` — Esquemas Zod para todas las operaciones CRUD
+- `<nombre>.controller.ts` — Handlers HTTP con decoradores de ruta
+- `<nombre>.service.ts` — Lógica de negocio con DI
+- `<nombre>.module.ts` — Declaración del módulo
+- `<nombre>.service.test.ts` — Tests unitarios
+- `<nombre>.api.test.ts` — Tests de integración
+
+**Ejemplos:**
+
+```bash
+kanji g resource users                    # Generar CRUD de users
+kanji g resource posts --dry-run          # Previsualizar sin crear
+kanji g resource comments --force         # Sobreescribir archivos existentes
+```
+
+### Gateway (WebSocket)
+
+```bash
+kanji g gateway <nombre>
+```
+
+Genera un gateway de WebSocket con integración de autenticación.
+
+### Solo Service
+
+```bash
+kanji g service <nombre>
+```
+
+Genera únicamente el archivo de service (sin controller ni módulo).
+
+### Solo Controller
+
+```bash
+kanji g controller <nombre>
+```
+
+Genera únicamente el archivo de controller.
+
+## kanji migrate
+
+Comandos de migración de la base de datos.
+
+```bash
+kanji migrate               # Ejecutar migraciones pendientes
+kanji migrate:status        # Ver estado de las migraciones
+kanji migrate:rollback      # Revertir la última migración
+kanji migrate:generate      # Generar nueva migración a partir de cambios en el schema
+```
+
+**Ejemplos:**
+
+```bash
+kanji migrate                   # Aplicar todas las migraciones pendientes
+kanji migrate:status            # Ver qué migraciones están aplicadas
+kanji migrate:rollback          # Deshacer la última migración
+kanji migrate:generate          # Comparar schema.ts con la DB, crear archivo de migración
+```
+
+:::caution[Orden de migraciones]
+Nunca edites un archivo de migración que ya fue commiteado. Siempre creá uno nuevo con `kanji migrate:generate`.
+:::
+
+## kanji db:push
+
+Aplicar cambios de schema directamente a la base de datos (solo para desarrollo).
+
+```bash
+kanji db:push
+```
+
+Esto aplica cambios de schema **sin crear un archivo de migración**. Usalo únicamente durante el desarrollo — en producción, siempre usá `kanji migrate`.
+
+## kanji db:studio
+
+Abrir Drizzle Studio — un explorador visual de la base de datos.
+
+```bash
+kanji db:studio
+```
+
+Abre una interfaz web donde podés explorar tablas, ejecutar queries e inspeccionar datos.
+
+## kanji seed:run
+
+Ejecutar archivos de seed para poblar la base de datos con datos de prueba.
+
+```bash
+kanji seed:run
+```
+
+Colocá los archivos de seed en `src/database/seeds/`.
+
+## kanji openapi:generate
+
+Generar la especificación OpenAPI a partir de tus contratos Zod.
+
+```bash
+kanji openapi:generate [opciones]
+```
+
+| Opción | Descripción | Valor por defecto |
+|---|---|---|
+| `--output <ruta>` | Ruta del archivo de salida | `openapi.json` |
+| `--check` | Solo validar (falla si la spec está desactualizada) | `false` |
+
+**Ejemplos:**
+
+```bash
+kanji openapi:generate                          # Crear/actualizar openapi.json
+kanji openapi:generate --output ./docs/api.json  # Ruta personalizada
+kanji openapi:generate --check                   # Validación en CI (exit 1 si está desactualizada)
+```
+
+## kanji sdk:generate
+
+Generar el SDK cliente en TypeScript a partir de la spec OpenAPI.
+
+```bash
+kanji sdk:generate [opciones]
+```
+
+| Opción | Descripción | Valor por defecto |
+|---|---|---|
+| `--output <directorio>` | Directorio o archivo de salida | `sdk/` |
+
+**Ejemplos:**
+
+```bash
+kanji sdk:generate                                       # Crear en sdk/
+kanji sdk:generate --output ../frontend/src/api.ts       # Directamente en el frontend
+```
+
+## kanji openapi:serve
+
+Servir documentación interactiva de la API.
+
+```bash
+kanji openapi:serve [opciones]
+```
+
+| Opción | Descripción | Valor por defecto |
+|---|---|---|
+| `--port <número>` | Puerto del servidor de docs | `3000` |
+| `--ui <tipo>` | Tipo de UI: `swagger`, `redoc` | `swagger` |
+
+**Ejemplos:**
+
+```bash
+kanji openapi:serve                 # Swagger UI en http://localhost:3000/docs
+kanji openapi:serve --port 3001     # Puerto personalizado
+kanji openapi:serve --ui redoc      # Usar ReDoc
+```
+
+## kanji auth-setup
+
+Asistente interactivo para configurar políticas de autorización.
+
+```bash
+kanji auth-setup
+```
+
+Te guía a través de:
+
+1. Seleccionar los recursos a proteger
+2. Configurar roles RBAC
+3. Crear políticas ACL
+4. Aplicar guards a los controllers

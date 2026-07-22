@@ -1,0 +1,265 @@
+---
+title: Commands
+description: Complete CLI command reference with all options
+---
+
+## kanji new
+
+Create a new Kanji project from a template.
+
+```bash
+kanji new <project-name> [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `--template <name>` | Project template: `starter`, `basic`, `saas-starter` | `basic` |
+| `--db <adapter>` | Database adapter: `postgres`, `mongodb` | `postgres` |
+
+**Examples:**
+
+```bash
+kanji new my-api                           # Basic template with Postgres
+kanji new my-api --template saas-starter   # SaaS template with multi-tenancy
+kanji new my-api --db mongodb              # Basic template with MongoDB
+```
+
+**What it creates:**
+
+```
+my-api/
+├── src/
+│   ├── database/
+│   │   ├── schema.ts
+│   │   └── migrations/
+│   ├── modules/
+│   │   └── users/
+│   │       ├── users.contracts.ts
+│   │       ├── users.controller.ts
+│   │       ├── users.service.ts
+│   │       └── users.module.ts
+│   ├── app.module.ts
+│   └── main.ts
+├── package.json
+├── tsconfig.json
+└── kanji.config.ts
+```
+
+## kanji dev
+
+Start development server with hot reload.
+
+```bash
+kanji dev [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `--port <number>` | Server port | `3000` |
+| `--host <string>` | Host to bind | `localhost` |
+
+**Examples:**
+
+```bash
+kanji dev                    # http://localhost:3000
+kanji dev --port 8080        # http://localhost:8080
+kanji dev --host 0.0.0.0     # Accessible from network
+```
+
+**Background mode:**
+
+```bash
+kanji dev --background       # Start in background
+kanji dev stop               # Stop background server
+kanji dev status             # Check if running
+kanji dev logs               # View logs
+```
+
+## kanji g / kanji generate
+
+Generate code scaffolding.
+
+```bash
+kanji g <type> <name> [options]
+```
+
+### Resource (CRUD Module)
+
+```bash
+kanji g resource <name> [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `--dry-run` | Preview files without creating them | `false` |
+| `--force` | Overwrite existing files | `false` |
+
+**What it generates:**
+
+- `<name>.contracts.ts` — Zod schemas for all CRUD operations
+- `<name>.controller.ts` — HTTP handlers with route decorators
+- `<name>.service.ts` — Business logic with DI
+- `<name>.module.ts` — Module declaration
+- `<name>.service.test.ts` — Unit tests
+- `<name>.api.test.ts` — Integration tests
+
+**Examples:**
+
+```bash
+kanji g resource users                    # Generate users CRUD
+kanji g resource posts --dry-run          # Preview without creating
+kanji g resource comments --force         # Overwrite existing files
+```
+
+### Gateway (WebSocket)
+
+```bash
+kanji g gateway <name>
+```
+
+Generates a WebSocket gateway with auth integration.
+
+### Service Only
+
+```bash
+kanji g service <name>
+```
+
+Generates only the service file (no controller or module).
+
+### Controller Only
+
+```bash
+kanji g controller <name>
+```
+
+Generates only the controller file.
+
+## kanji migrate
+
+Database migration commands.
+
+```bash
+kanji migrate               # Run pending migrations
+kanji migrate:status        # Show migration status
+kanji migrate:rollback      # Rollback last migration
+kanji migrate:generate      # Generate new migration from schema changes
+```
+
+**Examples:**
+
+```bash
+kanji migrate                   # Apply all pending migrations
+kanji migrate:status            # See which migrations are applied
+kanji migrate:rollback          # Undo the last migration
+kanji migrate:generate          # Compare schema.ts with DB, create migration file
+```
+
+:::caution[Migration ordering]
+Never edit a committed migration file. Always create a new one with `kanji migrate:generate`.
+:::
+
+## kanji db:push
+
+Push schema changes directly to the database (dev only).
+
+```bash
+kanji db:push
+```
+
+This applies schema changes **without creating a migration file**. Use only during development — in production, always use `kanji migrate`.
+
+## kanji db:studio
+
+Open Drizzle Studio — a visual database browser.
+
+```bash
+kanji db:studio
+```
+
+Opens a web UI where you can browse tables, run queries, and inspect data.
+
+## kanji seed:run
+
+Run seed files to populate the database with test data.
+
+```bash
+kanji seed:run
+```
+
+Place seed files in `src/database/seeds/`.
+
+## kanji openapi:generate
+
+Generate OpenAPI specification from your Zod contracts.
+
+```bash
+kanji openapi:generate [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `--output <path>` | Output file path | `openapi.json` |
+| `--check` | Validate only (fails if spec is outdated) | `false` |
+
+**Examples:**
+
+```bash
+kanji openapi:generate                          # Create/update openapi.json
+kanji openapi:generate --output ./docs/api.json  # Custom path
+kanji openapi:generate --check                   # CI validation (exit 1 if outdated)
+```
+
+## kanji sdk:generate
+
+Generate TypeScript client SDK from OpenAPI spec.
+
+```bash
+kanji sdk:generate [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `--output <dir>` | Output directory or file | `sdk/` |
+
+**Examples:**
+
+```bash
+kanji sdk:generate                                       # Create in sdk/
+kanji sdk:generate --output ../frontend/src/api.ts       # Direct to frontend
+```
+
+## kanji openapi:serve
+
+Serve interactive API documentation.
+
+```bash
+kanji openapi:serve [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `--port <number>` | Port for docs server | `3000` |
+| `--ui <type>` | UI type: `swagger`, `redoc` | `swagger` |
+
+**Examples:**
+
+```bash
+kanji openapi:serve                 # Swagger UI at http://localhost:3000/docs
+kanji openapi:serve --port 3001     # Custom port
+kanji openapi:serve --ui redoc      # Use ReDoc
+```
+
+## kanji auth-setup
+
+Interactive wizard for configuring authorization policies.
+
+```bash
+kanji auth-setup
+```
+
+Walks you through:
+1. Selecting resources to protect
+2. Configuring RBAC roles
+3. Creating ACL policies
+4. Applying guards to controllers

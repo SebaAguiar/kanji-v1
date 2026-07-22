@@ -1,0 +1,210 @@
+---
+title: Sistema de Módulos
+description: Cómo la arquitectura modular de Kanji maneja límites, dependencias y visibilidad
+---
+
+## Visión General
+
+Toda aplicación Kanji se compone de módulos. Los módulos no son solo carpetas organizativas — son **límites de configuración DI** que controlan qué servicios existen, qué pueden acceder, y qué exponen a otros módulos.
+
+## Definir un Módulo
+
+```typescript
+import { KanjijsModule } from '@kanjijs/core';
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
+import { UsersRepository } from './users.repository';
+
+@KanjijsModule({
+  controllers: [UsersController],
+  repositories: [UsersRepository],
+  providers: [UsersService],
+})
+export class UsersModule {}
+```
+
+Esto declara: "Este módulo provee `UsersService` vía `UsersRepository` y expone `UsersController` para routing HTTP."
+
+## Propiedades del Módulo
+
+| Propiedad | Propósito | Requerido |
+|---|---|---|
+| `imports` | Otros módulos de los que depende este módulo | No |
+| `controllers` | Handlers de endpoints HTTP | No |
+| `gateways` | Handlers de WebSocket gateways | No |
+| `repositories` | Clases de acceso a datos (decoradas con `@Repository()`) | No |
+| `providers` | Servicios/clases disponibles para inyección **dentro de este módulo** | No |
+| `exports` | Providers hechos disponibles a módulos que importan este | No |
+| `global` | Si es `true`, los providers están disponibles en todos lados sin import explícito | No |
+
+## Reglas de Visibilidad de Providers
+
+Un provider es visible para un módulo si **cualquiera** de estas es verdadera:
+
+1. **Está definido en el array `providers` del módulo** — Los providers locales siempre son visibles.
+2. **Es exportado por un módulo en el array `imports`** — Importado + exportado = visible.
+3. **Está en un módulo global** — Los providers globales son visibles en todos lados.
+
+```typescript
+// Módulo A
+@KanjijsModule({
+  providers: [ServiceA],
+  exports: [ServiceA],  // Hace ServiceA visible a importadores
+})
+export class ModuleA {}
+
+// Módulo B — puede usar ServiceA
+@KanjijsModule({
+  imports: [ModuleA],  // Ahora ServiceA es visible acá
+})
+export class ModuleB {}
+```
+
+Si un provider **no** es visible, el contenedor DI lanza un error al inicio: "Provider not found." Esta es una red de seguridad — captura errores de wiring antes de que lleguen a producción.
+
+## Exports — Compartir Providers entre Módulos
+
+Por defecto, los providers son **privados** de su módulo. Para compartir un servicio con otros módulos, debés exportarlo explícitamente:
+
+```typescript
+@KanjijsModule({
+  providers: [UsersService],
+  exports: [UsersService],  // Otros módulos pueden inyectar UsersService
+})
+export class UsersModule {}
+```
+
+Sin `exports`, cualquier módulo que intente inyectar `UsersService` fallará al inicio.
+
+**Cuándo exportar:**
+- Un servicio es usado por múltiples features (ej: `UsersService` es usado por `PostsModule` y `NotificationsModule`)
+- Un repositorio o cliente de base de datos necesita ser compartido
+
+**Cuándo NO exportar:**
+- Un servicio solo se usa dentro de su propio módulo
+- Exportar expone detalles de implementación (preferí interfaces/tokens)
+
+## Módulos Globales
+
+Algunos módulos son transversales — sus providers deben estar disponibles en todos lados sin import explícito:
+
+```typescript
+@KanjijsModule({ global: true })
+export class DatabaseModule {}
+```
+
+**Solo tres módulos deben ser globales:**
+
+| Módulo | Por qué global |
+|---|---|
+| `DatabaseModule` (`@kanjijs/store`) | Toda feature necesita acceso a la base de datos |
+| `AuthModule` (`@kanjijs/auth`) | Los guards de auth se usan en todos los controllers |
+| `ConfigModule` | La configuración se accede en todos lados |
+
+:::caution[No abuses de global]
+Los módulos globales rompen el encapsulamiento. Cualquier módulo puede acceder cualquier provider global sin declarar la dependencia. Esto hace más difícil entender qué necesita un módulo solo leyendo sus `imports`. Usá global con moderación.
+:::
+
+## Módulos Dinámicos con `forRoot()`
+
+Los módulos que necesitan configuración al momento de importar usan el patrón de método estático `forRoot()`:
+
+```typescript
+@KanjijsModule({})
+export class AuthModule {
+  static forRoot(config: AuthConfig): DynamicModule {
+    return {
+      module: AuthModule,
+      providers: [
+        { provide: AUTH_CONFIG, useValue: config },
+        { provide: AUTH_SERVICE, useClass: AuthService },
+      ],
+      exports: [AUTH_SERVICE],
+      global: true,  // Auth debe estar disponible en todos lados
+    };
+  }
+}
+```
+
+**Uso:**
+
+```typescript
+@KanjijsModule({
+  imports: [
+    AuthModule.forRoot({
+      jwtSecret: env('JWT_SECRET', z.string().min(32)),
+      providers: {
+        github: {
+          clientId: env('GITHUB_CLIENT_ID', z.string()),
+          clientSecret: env('GITHUB_CLIENT_SECRET', z.string()),
+        },
+      },
+    }),
+    StoreModule.forRoot({
+      type: 'postgres',
+      connectionString: env('DATABASE_URL', z.string().url()),
+      schema: { users, posts },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+**¿Por qué `forRoot()`?** Porque la configuración se necesita **al momento de importar** — el contenedor DI necesita saber el secreto JWT antes de poder crear el servicio de auth. Una propiedad estática de clase no funcionaría porque la configuración viene de variables de entorno, que se leen en runtime.
+
+## Registro de Módulos
+
+El módulo raíz (`app.module.ts`) es la cúspide del árbol de módulos. Importa todos los módulos feature y de infraestructura:
+
+```typescript
+@KanjijsModule({
+  imports: [
+    // Infraestructura (módulos dinámicos con config)
+    StoreModule.forRoot({ ... }),
+    AuthModule.forRoot({ ... }),
+
+    // Módulos feature (estáticos)
+    UsersModule,
+    PostsModule,
+    NotificationsModule,
+  ],
+})
+export class AppModule {}
+```
+
+**El orden importa:** Los módulos de infraestructura (Store, Auth) deben importarse antes de los módulos feature que dependen de ellos.
+
+## Dependencias Circulares
+
+Si el Módulo A importa al Módulo B y el Módulo B importa al Módulo A, Kanji detecta esto al inicio y lanza un error claro.
+
+**Cómo arreglarlo:** Extraé el provider compartido a un tercer módulo:
+
+```typescript
+// ❌ Circular: A → B → A
+@KanjijsModule({ imports: [ModuleB] })
+class ModuleA {}
+
+@KanjijsModule({ imports: [ModuleA] })
+class ModuleB {}
+
+// ✅ Arreglado: Extraer provider compartido a ModuleC
+@KanjijsModule({ exports: [SharedService] })
+class ModuleC {}
+
+@KanjijsModule({ imports: [ModuleC] })
+class ModuleA {}
+
+@KanjijsModule({ imports: [ModuleC] })
+class ModuleB {}
+```
+
+## Errores Comunes
+
+| Error | Síntoma | Solución |
+|---|---|---|
+| Olvidar `exports` | "Provider not found" al inicio | Agregá el provider al array `exports` del módulo |
+| Importar módulo incorrecto | "Provider not found" | Revisá los `imports` — puede que estés importando el módulo equivocado |
+| Demasiados módulos globales | Acoplamiento fuerte, difícil de testear | Solo `DatabaseModule`, `AuthModule` y `ConfigModule` deben ser globales |
+| Dependencias circulares | Crash al bootstrap | Extraé providers compartidos a un tercer módulo |
+| Falta `forRoot()` | Config undefined en servicios | Asegurate de que el módulo dinámico reciba config via `forRoot()` |

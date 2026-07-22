@@ -1,0 +1,260 @@
+---
+title: WebSockets
+description: Comunicación en tiempo real con WebSocket Gateways — auth, validación y broadcasting
+---
+
+## Descripción General
+
+Kanji provee soporte de primera clase para WebSockets con:
+
+- **Arquitectura basada en Gateways** — Similar a los controllers, pero para conexiones WebSocket
+- **Integración con auth** — El mismo `@UseGuards(AuthGuard)` que en rutas HTTP
+- **Validación de contratos** — Validá mensajes entrantes con schemas Zod
+- **Broadcasting** — Enviá a todos los clientes conectados o a salas específicas
+
+## Definí un Gateway
+
+Los Gateways son el equivalente WebSocket de los controllers:
+
+```typescript
+import { WebSocketGateway, WebSocketMessage } from '@kanjijs/platform-hono';
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard } from '@kanjijs/auth';
+import { Context } from 'hono';
+
+@WebSocketGateway('chat')
+@UseGuards(AuthGuard)  // Requerir auth para todos los mensajes
+export class ChatGateway {
+  @WebSocketMessage('send')
+  async handleMessage(c: WebSocketContext, data: { message: string }) {
+    const user = c.get('kanji.auth.user');
+
+    // Enviar a todos los clientes conectados
+    c.broadcast({
+      user: user.name,
+      message: data.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+```
+
+**Qué está pasando:**
+- `@WebSocketGateway('chat')` — Registra un endpoint WebSocket en `ws://localhost:3000/chat`
+- `@UseGuards(AuthGuard)` — Requiere un token JWT válido para la conexión
+- `@WebSocketMessage('send')` — Maneja mensajes con `event: 'send'`
+- `c.broadcast()` — Envía a TODOS los clientes conectados en este gateway
+
+## Registrar el Gateway en el Módulo
+
+Los Gateways se registran como controllers en su módulo:
+
+```typescript
+import { KanjijsModule } from '@kanjijs/core';
+import { ChatGateway } from './chat.gateway';
+import { ChatService } from './chat.service';
+
+@KanjijsModule({
+  controllers: [ChatGateway],  // Los Gateways van en el array de controllers
+  providers: [ChatService],
+})
+export class ChatModule {}
+```
+
+## Eventos de Mensajes
+
+Manejá diferentes tipos de mensajes con `@WebSocketMessage`:
+
+```typescript
+@WebSocketGateway('chat')
+export class ChatGateway {
+  @WebSocketMessage('send')
+  async handleSend(c: WebSocketContext, data: { message: string }) {
+    // Manejar evento 'send'
+  }
+
+  @WebSocketMessage('join')
+  async handleJoin(c: WebSocketContext, data: { room: string }) {
+    // Manejar evento 'join'
+  }
+
+  @WebSocketMessage('leave')
+  async handleLeave(c: WebSocketContext, data: { room: string }) {
+    // Manejar evento 'leave'
+  }
+}
+```
+
+## Validación de Contratos en Mensajes
+
+Validá mensajes entrantes con schemas Zod — el mismo patrón que los contratos HTTP:
+
+```typescript
+import { z } from 'zod';
+
+const MessageContract = z.object({
+  message: z.string().min(1).max(1000),
+  room: z.string().optional(),
+});
+
+const JoinRoomContract = z.object({
+  room: z.string().min(1).max(50),
+});
+
+@WebSocketGateway('chat')
+export class ChatGateway {
+  @WebSocketMessage('send', { schema: MessageContract })
+  async handleSend(c: WebSocketContext, data: { message: string; room?: string }) {
+    // data está validado y tipado — guaranteed válido por el middleware
+    c.broadcast({ user: c.get('kanji.auth.user').name, message: data.message });
+  }
+
+  @WebSocketMessage('join', { schema: JoinRoomContract })
+  async handleJoin(c: WebSocketContext, data: { room: string }) {
+    c.join(data.room);
+    c.broadcast({ info: `${c.get('kanji.auth.user').name} se unió a ${data.room}` });
+  }
+}
+```
+
+**Qué pasa con mensajes inválidos:**
+- Si la validación falla, el handler NO se ejecuta
+- Se envía un mensaje de error al cliente
+- La conexión se mantiene abierta
+
+## Broadcasting
+
+### Enviar a Todos los Clientes
+
+```typescript
+c.broadcast({ type: 'announcement', message: 'Mantenimiento del servidor en 5 minutos' });
+```
+
+### Enviar a una Sala
+
+```typescript
+// Unirse a una sala
+c.join('room-name');
+
+// Enviar a la sala
+c.to('room-name').broadcast({ message: '¡Hola sala!' });
+```
+
+### Enviar a un Cliente Específico
+
+```typescript
+c.send({ type: 'private', message: 'Esto es solo para vos' });
+```
+
+## Conexión del Cliente
+
+### Browser / JavaScript
+
+```typescript
+const ws = new WebSocket('ws://localhost:3000/chat');
+
+ws.onopen = () => {
+  // Enviar un mensaje
+  ws.send(JSON.stringify({
+    event: 'send',
+    data: { message: '¡Hola a todos!' },
+  }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log(`${data.user}: ${data.message}`);
+};
+
+ws.onerror = (error) => {
+  console.error('Error de WebSocket:', error);
+};
+```
+
+### Con Autenticación
+
+Pasá el token JWT como parámetro de query o en el primer mensaje:
+
+```typescript
+// Opción 1: Parámetro de query
+const ws = new WebSocket('ws://localhost:3000/chat?token=your-jwt-token');
+
+// Opción 2: Primer mensaje
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    event: 'auth',
+    data: { token: 'your-jwt-token' },
+  }));
+};
+```
+
+## Ejemplo Completo: Chat en Tiempo Real
+
+```typescript
+import { WebSocketGateway, WebSocketMessage } from '@kanjijs/platform-hono';
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard } from '@kanjijs/auth';
+import { Injectable, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+import { z } from 'zod';
+
+const MessageSchema = z.object({
+  message: z.string().min(1).max(1000),
+  room: z.string().default('general'),
+});
+
+@Injectable()
+export class ChatService {
+  constructor(@Inject(DATABASE_CLIENT) private db: Database) {}
+
+  async saveMessage(userId: string, message: string, room: string) {
+    return this.db.query.messages.insert({ userId, message, room });
+  }
+
+  async getRecentMessages(room: string, limit = 50) {
+    return this.db.query.messages
+      .select()
+      .where({ room })
+      .limit(limit)
+      .orderBy('createdAt', 'desc');
+  }
+}
+
+@WebSocketGateway('chat')
+@UseGuards(AuthGuard)
+export class ChatGateway {
+  constructor(private readonly chatService: ChatService) {}
+
+  @WebSocketMessage('send', { schema: MessageSchema })
+  async handleSend(c: WebSocketContext, data: { message: string; room: string }) {
+    const user = c.get('kanji.auth.user');
+
+    // Guardar en la base de datos
+    await this.chatService.saveMessage(user.id, data.message, data.room);
+
+    // Enviar a todos los clientes
+    c.broadcast({
+      user: user.name,
+      message: data.message,
+      room: data.room,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  @WebSocketMessage('history', { schema: z.object({ room: z.string() }) })
+  async handleHistory(c: WebSocketContext, data: { room: string }) {
+    const messages = await this.chatService.getRecentMessages(data.room);
+    c.send({ type: 'history', messages });
+  }
+}
+```
+
+## Errores Comunes
+
+| Error | Síntoma | Solución |
+|---|---|---|
+| Falta `@UseGuards(AuthGuard)` | Usuarios sin autenticar pueden conectarse | Agregá auth guard al gateway |
+| Gateway no está en el array `controllers` | Gateway no registrado | Agregalo al `controllers` del módulo |
+| Sin schema en `@WebSocketMessage` | Mensajes inválidos llegan al handler | Agregá la opción `{ schema: ZodSchema }` |
+| Olvidar `JSON.stringify` en el cliente | No se reciben mensajes | El cliente debe enviar strings JSON |
+| Broadcast en loop | Mensajes duplicados | Usá `c.broadcast()` una vez, no por cliente |

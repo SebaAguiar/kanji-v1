@@ -1,0 +1,245 @@
+---
+title: OpenAPI y SDK
+description: Generá specs OpenAPI y clientes TypeScript type-safe a partir de tus contratos Zod
+---
+
+## Descripción General
+
+Kanji genera dos cosas a partir de tus contratos Zod:
+
+1. **Spec OpenAPI** — Documentación de API estándar de la industria (Swagger/ReDoc)
+2. **SDK TypeScript** — Cliente completamente tipado para que lo use el frontend
+
+**Una fuente de verdad (tus contratos) → Dos salidas (spec + SDK).**
+
+## El Flujo
+
+```
+Tus contratos Zod (fuente de verdad)
+    ↓
+Decoradores @Contract() (recolección de metadata)
+    ↓
+kanji openapi:generate (escanea todos los contratos)
+    ↓
+openapi.json (spec OpenAPI 3.0)
+    ↓
+kanji sdk:generate (consumo de la spec)
+    ↓
+SDK TypeScript (cliente completamente tipado)
+```
+
+## Generar la Spec OpenAPI
+
+```bash
+kanji openapi:generate
+```
+
+Esto escanea todos los decoradores `@Contract()` en tu código y crea `openapi.json`:
+
+```json
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Mi API", "version": "1.0.0" },
+  "paths": {
+    "/users": {
+      "post": {
+        "summary": "Crear usuario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Usuario creado" },
+          "400": { "description": "Error de validación" }
+        }
+      }
+    }
+  }
+}
+```
+
+### Opciones
+
+```bash
+kanji openapi:generate --output ./docs/api.json    # Path de salida personalizado
+kanji openapi:generate --check                      # Solo validar (para CI)
+```
+
+## Generar el SDK TypeScript
+
+```bash
+kanji sdk:generate
+```
+
+Esto crea un cliente tipado en `sdk/`:
+
+```typescript
+// sdk/index.ts — Archivo generado
+import { createKanjiClient } from './client';
+
+export { createKanjiClient };
+export type { CreateUserRequest, CreateUserResponse, GetUserRequest, GetUserResponse };
+```
+
+### Uso en el Frontend
+
+```typescript
+import { createKanjiClient } from './sdk';
+
+const client = createKanjiClient({ baseUrl: 'http://localhost:3000' });
+
+// Completamente tipado — funciona el autocompletado, los tipos se verifican
+const user = await client.users.create({
+  body: { name: 'John', email: 'john@example.com' },
+});
+// user está tipado como { id: string; name: string; email: string }
+
+// Manejo de errores — los tipos incluyen respuestas de error
+try {
+  const user = await users.create({ body: { name: '' } });
+} catch (error) {
+  // error está tipado como { error: string; issues: Array<{ path, code, message }> }
+}
+```
+
+### Opciones
+
+```bash
+kanji sdk:generate --output ../frontend/src/api.ts    # Path de salida personalizado
+```
+
+## Servir la Documentación de la API
+
+```bash
+kanji openapi:serve
+```
+
+Abre Swagger UI en `http://localhost:3000/docs`. Tu API ahora es navegable con documentación interactiva.
+
+### Opciones
+
+```bash
+kanji openapi:serve --port 3001          # Puerto personalizado
+kanji openapi:serve --ui redoc           # Usar ReDoc en vez de Swagger
+```
+
+## Integración con CI
+
+Agregá esto a tu pipeline de CI para asegurar que la spec se mantenga actualizada:
+
+```yaml
+# .github/workflows/ci.yml
+- name: Validar spec OpenAPI
+  run: kanji openapi:generate --check
+```
+
+Esto **fallea el build** si la spec está desactualizada (los contratos cambiaron pero la spec no se regeneró).
+
+### Flujo Completo de CI
+
+```yaml
+- name: Instalar dependencias
+  run: bun install
+
+- name: Lint
+  run: bun run lint
+
+- name: Verificación de tipos
+  run: bun run typecheck
+
+- name: Test
+  run: bun test
+
+- name: Validar spec OpenAPI
+  run: kanji openapi:generate --check
+
+- name: Build
+  run: bun run build
+```
+
+## Mejorar la Documentación
+
+### Agregar Ejemplos
+
+Usá el decorador `@Example` para agregar valores de ejemplo a tu spec OpenAPI:
+
+```typescript
+import { Example } from '@kanjijs/openapi';
+
+export const CreateUserContract = {
+  method: 'POST' as const,
+  path: '/users',
+  request: {
+    body: z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    }),
+  },
+  responses: {
+    201: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string(),
+    }),
+  },
+  // El valor de ejemplo aparece en Swagger UI
+  example: {
+    summary: 'Crear un usuario nuevo',
+    value: {
+      name: 'John Doe',
+      email: 'john@example.com',
+    },
+  },
+};
+```
+
+### Agregar Descripciones
+
+```typescript
+export const ListUsersContract = {
+  method: 'GET' as const,
+  path: '/users',
+  request: {
+    query: z.object({
+      page: z.coerce.number().int().positive().default(1)
+        .describe('Número de página (empieza en 1)'),
+      limit: z.coerce.number().int().min(1).max(100).default(20)
+        .describe('Elementos por página (máximo 100)'),
+    }),
+  },
+  responses: {
+    200: z.object({
+      data: z.array(UserSchema),
+      total: z.number().describe('Cantidad total de usuarios'),
+      page: z.number(),
+    }),
+  },
+};
+```
+
+## Después de Cada Cambio en los Contratos
+
+```bash
+# Regenerá tanto la spec como el SDK
+kanji openapi:generate && kanji sdk:generate --output ../frontend/src/api.ts
+```
+
+Los tipos se propagan automáticamente. Si agregás un campo nuevo a un contrato, el SDK lo toma en la regeneración.
+
+## Errores Comunes
+
+| Error | Síntoma | Solución |
+|---|---|---|
+| Spec desactualizada | Los tipos del SDK del frontend no coinciden con la API | Re-ejecutá `kanji openapi:generate` |
+| Falta `method`/`path` en el contrato | El endpoint no aparece en la spec | Agregá `method` y `path` a cada contrato |
+| Olvidar regenerar | El CI falla con `--check` | Ejecutá `kanji openapi:generate` antes de commitear |
+| Sin respuestas de error en el contrato | El SDK no conoce los tipos de error | Agregá schemas de respuesta 400/401/404/409 |

@@ -1,0 +1,327 @@
+---
+title: Testing
+description: Tests unitarios, de integración y E2E con las utilidades integradas de Kanji
+---
+
+## Descripción General
+
+Kanji provee utilidades de testing vía `@kanjijs/testing`:
+
+- `TestingModuleBuilder` — Creá módulos de test aislados con bases de datos en memoria
+- Base de datos de test en memoria — Rápida, sin dependencias externas
+- Fixture factories — Generá datos de test
+
+Kanji usa el test runner integrado de Bun (`bun:test`) por defecto.
+
+## Filosofía de Testing
+
+1. **Testeá el contrato, no la implementación** — Si la API retorna la forma correcta, la implementación puede cambiar libremente.
+2. **Aislamiento obligatorio** — Cada test obtiene su propio contenedor DI. Sin estado compartido entre tests.
+3. **Seguridad de tipos en tests** — La misma rigurosidad de TypeScript que en código de producción.
+
+## Tests Unitarios
+
+ testeá services de forma aislada con dependencias mockeadas:
+
+```typescript
+import { describe, it, expect, mock } from 'bun:test';
+import { UsersService } from './users.service';
+
+describe('UsersService', () => {
+  it('debería crear un usuario', async () => {
+    // Mockear la base de datos
+    const mockDb = {
+      query: {
+        users: {
+          insert: mock(() => Promise.resolve([{ id: '1', name: 'Alice', email: 'alice@test.com' }])),
+          findBy: mock(() => Promise.resolve(null)),
+        },
+      },
+    };
+
+    const service = new UsersService(mockDb as any);
+    const user = await service.create({ name: 'Alice', email: 'alice@test.com' });
+
+    expect(user.name).toBe('Alice');
+    expect(mockDb.query.users.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('debería lanzar ConflictError para email duplicado', async () => {
+    const mockDb = {
+      query: {
+        users: {
+          findBy: mock(() => Promise.resolve({ id: 'existing', email: 'alice@test.com' })),
+        },
+      },
+    };
+
+    const service = new UsersService(mockDb as any);
+
+    await expect(
+      service.create({ name: 'Alice', email: 'alice@test.com' })
+    ).rejects.toThrow('Email already registered');
+  });
+});
+```
+
+### Testear Contratos Zod
+
+Los contratos son funciones puras — testealos directamente:
+
+```typescript
+import { describe, it, expect } from 'bun:test';
+import { CreateUserContract } from './users.contracts';
+
+describe('CreateUserContract', () => {
+  it('debería aceptar datos válidos', () => {
+    const result = CreateUserContract.request.body.safeParse({
+      name: 'Alice',
+      email: 'alice@example.com',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('debería rechazar email inválido', () => {
+    const result = CreateUserContract.request.body.safeParse({
+      name: 'Alice',
+      email: 'not-an-email',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('debería rechazar nombre vacío', () => {
+    const result = CreateUserContract.request.body.safeParse({
+      name: '',
+      email: 'alice@example.com',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+```
+
+## Tests de Integración
+
+ testeá endpoints HTTP completos con una base de datos en memoria:
+
+```typescript
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { TestingModuleBuilder } from '@kanjijs/testing';
+import { UsersModule } from './users.module';
+
+describe('Users API (Integración)', () => {
+  const app = new TestingModuleBuilder()
+    .import(UsersModule)
+    .useInMemoryDatabase()
+    .build();
+
+  it('debería crear y recuperar un usuario', async () => {
+    // Crear
+    const createRes = await app.request('/users', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'John', email: 'john@example.com' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    expect(createRes.status).toBe(201);
+    const user = await createRes.json();
+    expect(user.name).toBe('John');
+    expect(user.id).toBeDefined();
+
+    // Recuperar
+    const getRes = await app.request(`/users/${user.id}`);
+    expect(getRes.status).toBe(200);
+    const fetched = await getRes.json();
+    expect(fetched.email).toBe('john@example.com');
+  });
+
+  it('debería retornar 400 para datos inválidos', async () => {
+    const res = await app.request('/users', {
+      method: 'POST',
+      body: JSON.stringify({ name: '' }),  // Falta email, nombre vacío
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    expect(res.status).toBe(400);
+    const error = await res.json();
+    expect(error.error).toBe('VALIDATION_ERROR');
+  });
+});
+```
+
+### Testear con Autenticación
+
+```typescript
+import { TestingModuleBuilder } from '@kanjijs/testing';
+import { UsersModule } from './users.module';
+import { AuthModule } from '@kanjijs/auth';
+
+describe('Endpoints Protegidos', () => {
+  const app = new TestingModuleBuilder()
+    .import(AuthModule.forRoot({
+      jwtSecret: 'test-secret-key-for-testing-only',
+    }))
+    .import(UsersModule)
+    .useInMemoryDatabase()
+    .build();
+
+  it('debería rechazar requests sin autenticar', async () => {
+    const res = await app.request('/users/me');
+    expect(res.status).toBe(401);
+  });
+
+  it('debería retornar perfil para requests autenticados', async () => {
+    // Primero, obtener un token (simular login)
+    const token = await app.getAuthService().createToken({
+      id: 'user-1',
+      email: 'test@example.com',
+      roles: ['user'],
+    });
+
+    const res = await app.request('/users/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(res.status).toBe(200);
+    const user = await res.json();
+    expect(user.id).toBe('user-1');
+  });
+});
+```
+
+## Tests E2E
+
+ testeá el stack completo de la aplicación:
+
+```typescript
+import { describe, it, expect } from 'bun:test';
+import { KanjijsAdapter } from '@kanjijs/platform-hono';
+import { AppModule } from './app.module';
+
+describe('E2E — Flujo Completo de Usuario', () => {
+  const app = new KanjijsAdapter(AppModule);
+
+  it('debería manejar el flujo CRUD completo', async () => {
+    // Crear
+    const createRes = await app.request('/users', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'John', email: 'john@example.com' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(createRes.status).toBe(201);
+    const { id } = await createRes.json();
+
+    // Leer
+    const getRes = await app.request(`/users/${id}`);
+    expect(getRes.status).toBe(200);
+
+    // Actualizar
+    const updateRes = await app.request(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: 'Jane' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(updateRes.status).toBe(200);
+
+    // Borrar
+    const deleteRes = await app.request(`/users/${id}`, {
+      method: 'DELETE',
+    });
+    expect(deleteRes.status).toBe(204);
+
+    // Verificar que se borró
+    const notFoundRes = await app.request(`/users/${id}`);
+    expect(notFoundRes.status).toBe(404);
+  });
+});
+```
+
+## Ejecutar Tests
+
+```bash
+bun test                    # Ejecutar todos los tests
+bun test --watch            # Modo watch (se re-ejecuta al cambiar archivos)
+bun test --coverage         # Con reporte de cobertura
+bun test users              # Ejecutar solo tests que matcheen "users"
+bun test --filter users     # Sintaxis alternativa de filtro
+```
+
+## Objetivos de Cobertura
+
+| Área | Cobertura Mínima |
+|---|---|
+| Lógica de negocio (services) | 80% |
+| Contratos (schemas Zod) | 90% |
+| Middleware de auth | 85% |
+| Queries de base de datos | 80% |
+| Comandos de CLI | 60% |
+
+## Organización de Archivos de Test
+
+```
+src/
+├── modules/
+│   └── users/
+│       ├── users.service.ts
+│       ├── users.service.test.ts      # Tests unitarios colocados junto al código
+│       └── ...
+└── tests/
+    ├── unit/                          # Tests unitarios adicionales
+    │   └── users.service.test.ts
+    ├── integration/                   # Tests de endpoints HTTP
+    │   └── users.api.test.ts
+    └── e2e/                           # Tests de stack completo
+        └── user-flow.test.ts
+```
+
+## Patrones Comunes de Testing
+
+### Mockear la Base de Datos
+
+```typescript
+const mockDb = {
+  query: {
+    users: {
+      insert: mock(() => Promise.resolve([mockUser])),
+      findById: mock(() => Promise.resolve(mockUser)),
+      findBy: mock(() => Promise.resolve(null)),
+      select: mock(() => Promise.resolve([mockUser])),
+      where: () => ({
+        update: mock(() => Promise.resolve([mockUser])),
+        delete: mock(() => Promise.resolve([mockUser])),
+      }),
+    },
+  },
+};
+```
+
+### Testear Rutas de Error
+
+Siempre testeá tanto los casos de éxito como los de fallo:
+
+```typescript
+describe('UsersService', () => {
+  it('debería crear usuario con entrada válida', async () => { /* ... */ });
+  it('debería lanzar ConflictError con email duplicado', async () => { /* ... */ });
+  it('debería lanzar ValidationError con datos inválidos', async () => { /* ... */ });
+  it('debería lanzar NotFoundError cuando el usuario no existe', async () => { /* ... */ });
+});
+```
+
+### Testear Contratos Directamente
+
+```typescript
+// Testear schemas Zod sin overhead de HTTP
+const result = Contract.request.body.safeParse(invalidData);
+expect(result.success).toBe(false);
+```
+
+## Errores Comunes
+
+| Error | Síntoma | Solución |
+|---|---|---|
+| Testear detalles de implementación | Los tests se rompen al refactorizar | Testeá comportamiento, no internals |
+| Estado compartido entre tests | Tests inestables, dependen del orden | Usá `beforeEach` para resetear estado |
+| No testear rutas de error | Bugs llegan a producción | Testeá éxito y fallo |
+| Usar `any` en tests | Errores de tipo ocultos | Usá tipos correctos también en tests |
+| URLs de DB hardcodeadas | Los tests pegan en la DB de producción | Usá `useInMemoryDatabase()` |
+| Mockear de más | Tests pasan pero el código está roto | Mockeá boundaries, no internals |

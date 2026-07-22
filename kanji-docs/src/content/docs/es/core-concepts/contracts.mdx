@@ -1,0 +1,280 @@
+---
+title: Contratos
+description: Desarrollo contract-first con Zod — la fuente de verdad para tu API
+---
+
+## ¿Qué son los Contratos?
+
+Los contratos definen la forma de tu API usando esquemas Zod. Son la **fuente de verdad única** — una definición que potencia cuatro cosas:
+
+1. **Validación en runtime** — Requests inválidos son rechazados antes de llegar a tu handler
+2. **Tipos TypeScript** — Inferidos de esquemas Zod, sin interfaces manuales
+3. **Spec OpenAPI** — Auto-generado para documentación de API
+4. **SDK TypeScript** — Cliente tipado auto-generado para consumo del frontend
+
+**Una definición. Cuatro salidas. Cero duplicación.**
+
+## Forma del Contrato
+
+Todo contrato tiene cuatro partes: `method`, `path`, `request` y `responses`.
+
+```typescript
+import { z } from 'zod';
+
+export const CreateUserContract = {
+  // Método HTTP — determina qué decorador de ruta usar
+  method: 'POST' as const,
+
+  // Path URL — soporta params como :id
+  path: '/users',
+
+  // Forma del request — qué envía el cliente
+  request: {
+    body: z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      role: z.enum(['user', 'admin']).default('user'),
+    }),
+    // Opcional: params, query, headers, cookies
+    // params: z.object({ id: z.string().uuid() }),
+    // query: z.object({ include: z.string().optional() }),
+  },
+
+  // Formas del response — claveado por código de estado HTTP
+  responses: {
+    201: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string(),
+      role: z.string(),
+    }),
+    400: z.object({
+      error: z.string(),
+      issues: z.array(z.object({
+        path: z.string(),
+        code: z.string(),
+        message: z.string(),
+      })),
+    }),
+    409: z.object({
+      error: z.string(),
+      message: z.string(),
+    }),
+  },
+};
+```
+
+**¿Por qué `method` y `path` en el Contrato?** Porque Kanji los usa para generar specs OpenAPI automáticamente y registrar rutas. El contrato ES la definición de la ruta.
+
+## Validación del Request
+
+El objeto `request` define qué debe enviar el cliente:
+
+```typescript
+request: {
+  body: z.object({ ... }),      // Body de POST/PUT/PATCH
+  params: z.object({ ... }),    // Parámetros de URL (/users/:id)
+  query: z.object({ ... }),     // Query string (?page=1&limit=20)
+  headers: z.object({ ... }),   // Headers custom
+  cookies: z.object({ ... }),   // Cookies
+}
+```
+
+Todos los campos son opcionales — solo validá lo que necesités.
+
+### Patrones Comunes
+
+```typescript
+// Paginación con defaults
+query: z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+}),
+
+// Parámetro UUID de URL
+params: z.object({
+  id: z.string().uuid(),
+}),
+
+// Input de fecha flexible
+body: z.object({
+  startDate: z.coerce.date(),  // Acepta strings, timestamps, objetos Date
+}),
+```
+
+## Formas del Response
+
+Los responses se clavean por código de estado HTTP. Esto habilita:
+- Documentación OpenAPI precisa
+- Generación de SDK tipado (diferentes tipos por código de estado)
+- Contrato claro entre frontend y backend
+
+```typescript
+responses: {
+  200: z.object({ data: z.array(UserSchema) }),        // Éxito
+  400: z.object({ error: z.string(), issues: z.array(IssueSchema) }),  // Error de validación
+  401: z.object({ error: z.string(), message: z.string() }),           // No autorizado
+  404: z.object({ error: z.string(), message: z.string() }),           // No encontrado
+  409: z.object({ error: z.string(), message: z.string() }),           // Conflicto
+},
+```
+
+## Usar Contratos en Controllers
+
+### Opción 1: Por Método con `@Contract()`
+
+```typescript
+import { Controller, Get, Post, Contract } from '@kanjijs/platform-hono';
+import { Context } from 'hono';
+
+@Controller('/users')
+export class UsersController {
+  @Post('/')
+  @Contract(CreateUserContract)  // Valida body contra CreateUserContract
+  async create(c: Context) {
+    const body = c.get('kanji.validated.body');  // Tipado como z.infer<typeof schema>
+    // ...
+  }
+
+  @Get('/:id')
+  @Contract(GetUserContract)  // Valida params contra GetUserContract
+  async findById(c: Context) {
+    const { id } = c.get('kanji.validated.params');  // Tipado como { id: string }
+    // ...
+  }
+}
+```
+
+### Opción 2: A Nivel de Controller con `@ContractOf()`
+
+```typescript
+@Controller('/users')
+@ContractOf({
+  create: CreateUserContract,
+  findById: GetUserContract,
+  list: ListUsersContract,
+})
+export class UsersController {
+  @Post('/')
+  @Contract('create')
+  async create(c: Context) {
+    const body = c.get('kanji.validated.body');
+    // ...
+  }
+}
+```
+
+## Acceder a Datos Validados
+
+Después de que el middleware de contrato se ejecuta, los datos validados están disponibles vía context keys:
+
+```typescript
+c.get('kanji.validated.body')     // Body request tipado
+c.get('kanji.validated.query')    // Parámetros de query tipados
+c.get('kanji.validated.params')   // Parámetros de URL tipados
+c.get('kanji.validated.headers')  // Headers tipados
+c.get('kanji.validated.cookies')  // Cookies tipadas
+```
+
+:::caution[Error común]
+La key correcta es `kanji.validated.body`, NO `kanji.validation.body` (sin `d`). Este es el typo más común.
+:::
+
+## Flujo de Validación
+
+```
+Llega el request
+    ↓
+El middleware @Contract() intercepta
+    ↓
+El esquema Zod valida los datos del request
+    ↓
+├── Válido → Almacena en context keys → Ejecuta handler
+└── Inválido → Devuelve 400 con errores estructurados → Handler NO se ejecuta
+```
+
+El handler **nunca se ejecuta** para requests inválidos. Esto significa que podés asumir que `c.get('kanji.validated.body')` siempre es válido y tipado.
+
+## Respuesta de Error Estándar
+
+Cuando la validación falla, Kanji devuelve una respuesta 400 estructurada:
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "issues": [
+    {
+      "path": "body.email",
+      "code": "invalid_type",
+      "message": "Expected string, received number"
+    },
+    {
+      "path": "body.name",
+      "code": "too_small",
+      "message": "String must contain at least 1 character"
+    }
+  ]
+}
+```
+
+Cada issue incluye:
+- `path` — Dónde ocurrió el error (notación punto: `body.email`)
+- `code` — Código de error Zod (`invalid_type`, `too_small`, etc.)
+- `message` — Descripción legible del error
+
+## Los Contratos Generan OpenAPI
+
+Desde estos esquemas Zod, Kanji genera un spec OpenAPI 3.0 completo:
+
+```bash
+kanji openapi:generate  # Crea openapi.json
+```
+
+El spec incluye:
+- Todos los endpoints con métodos y paths
+- Schemas de request/response (convertidos de Zod)
+- Requisitos de autenticación
+- Valores de ejemplo
+
+## Los Contratos Generan SDK
+
+Desde el spec OpenAPI, Kanji genera un cliente TypeScript tipado:
+
+```bash
+kanji sdk:generate --output ../frontend/src/api.ts
+```
+
+```typescript
+import { createKanjiClient } from './api';
+
+const client = createKanjiClient({ baseUrl: 'http://localhost:3000' });
+
+// Completamente tipado — user tiene { id, name, email, role }
+const user = await client.users.create({
+  body: { name: 'Juan', email: 'juan@ejemplo.com' },
+});
+```
+
+## Flujo Contract-First
+
+```
+1. Definir contrato (esquema Zod)
+2. Implementar servicio (lógica de negocio)
+3. Conectar controller (handler delgado)
+4. Ejecutar kanji openapi:generate
+5. Ejecutar kanji sdk:generate
+6. Frontend usa el SDK tipado
+```
+
+Si cambiás el contrato, regenerá el spec y el SDK. Los tipos se propagan automáticamente.
+
+## Errores Comunes
+
+| Error | Síntoma | Solución |
+|---|---|---|
+| Falta `method`/`path` | Spec OpenAPI incompleto, rutas no registradas | Agregá `method` y `path` a cada contrato |
+| Context key incorrecto | `c.get('kanji.validated.body')` devuelve undefined | Usá `kanji.validated` (con `d`) |
+| Sin `@Contract()` en ruta | Validación saltada, handler obtiene data cruda | Agregá `@Contract()` a cada handler |
+| Validación manual en handler | Código redundante, sin generación OpenAPI | Usá `@Contract()` — el middleware lo maneja |
+| Faltan error responses | SDK no conoce tipos de error | Agregá schemas de response 400/401/404/409 |

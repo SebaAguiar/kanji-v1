@@ -1,0 +1,163 @@
+---
+title: Arquitectura
+description: Cómo está diseñado Kanji Framework y por qué cada decisión fue tomada
+---
+
+## Filosofía de Diseño
+
+Kanji se construye sobre cuatro pilares:
+
+1. **Velocidad sin compromiso** — Lanzá features 10x más rápido que frameworks tradicionales. Cero boilerplate, contract-first, CLI scaffolding.
+2. **Type-safe de punta a punta** — Los tipos fluyen de contratos Zod → validación en runtime → spec OpenAPI → SDK TypeScript. Una definición, cuatro salidas.
+3. **Modular por diseño** — Límites estrictos entre features. Sin auto-registration, sin estado global, sin magia. Todo es explícito.
+4. **Seguridad por defecto** — Auth, RBAC, ACL, rate limiting y security headers integrados. No son add-ons opcionales.
+
+## El Pipeline de Request
+
+Cada request HTTP fluye por este pipeline exacto:
+
+```
+Request del Cliente
+    ↓
+Middleware Global (requestId, cors, logger, security headers)
+    ↓
+Middleware Auth (resolver principal desde JWT)
+    ↓
+CLP — Permisos a Nivel de Clase ("¿puede este usuario acceder a este recurso?")
+    ↓
+Validación de Contrato (Zod valida body, params, query, headers)
+    ↓
+ACL — Permisos a Nivel de Objeto ("¿puede este usuario acceder a ESTE objeto?")
+    ↓
+Handler del Controller (parsear datos validados, llamar servicio)
+    ↓
+Service (lógica de negocio, orquestación)
+    ↓
+Repository (acceso a datos, queries, mutaciones)
+    ↓
+Database (PostgreSQL / MongoDB)
+    ↓
+Serialización de Response
+    ↓
+Filtro de Excepciones (si hay error → respuesta HTTP estructurada)
+```
+
+**Idea clave:** La validación, auth y permisos NO son tu responsabilidad en el handler. Son manejados por middleware y decoradores. Tu handler solo hace lógica de negocio. El acceso a datos vive en la capa Repository — los Services nunca tocan la DB directamente.
+
+## Capas de Arquitectura
+
+```
+┌─────────────────────────────────────────────┐
+│              Capa de Aplicación             │
+│  Controllers, Services, Repositories        │
+│  (Acá vive tu código)                       │
+├─────────────────────────────────────────────┤
+│            Capa de Contratos (Zod)          │
+│   Validación + Tipos + Spec OpenAPI         │
+│   (Fuente de verdad para tu API)            │
+├─────────────────────────────────────────────┤
+│           Capa de Plataforma (Hono)         │
+│   Router HTTP, Middleware, WebSocket        │
+│   (Maneja todas las preocupaciones HTTP/WS)  │
+├─────────────────────────────────────────────┤
+│            Capa Core (Contenedor DI)        │
+│   Sistema de Módulos, Inyección DI          │
+│   (Une todo junto)                          │
+├─────────────────────────────────────────────┤
+│              Capa de Store                  │
+│   PostgreSQL (Drizzle ORM) / MongoDB        │
+│   (Abstracción de base de datos)            │
+└─────────────────────────────────────────────┘
+```
+
+## Ecosistema de Packages
+
+Cada package tiene una única responsabilidad:
+
+| Package | Propósito | Cuándo lo usás |
+|---|---|---|
+| `@kanjijs/core` | Sistema de módulos, contenedor DI, decoradores (`@Module`, `@Injectable`, `@Repository`, `@Inject`) | Siempre — es la base |
+| `@kanjijs/platform-hono` | Adaptador Hono, metadata HTTP (`@Controller`, `@Get`, `@Post`), WebSocket gateways | Siempre — es la capa HTTP |
+| `@kanjijs/contracts` | Validación Zod, decorador `@Contract()`, `ZodValidator` | Siempre — desarrollo contract-first |
+| `@kanjijs/auth` | Sesiones JWT, OAuth 2.0 (Google, GitHub, Microsoft), guards RBAC y ACL | Cuando necesitás autenticación |
+| `@kanjijs/store` | Abstracción de base de datos — PostgreSQL (Drizzle) y MongoDB | Cuando necesitás base de datos |
+| `@kanjijs/openapi` | Generación de spec OpenAPI, generación de SDK TypeScript | Cuando necesitás docs de API o clientes frontend |
+| `@kanjijs/testing` | `TestingModuleBuilder`, DB en memoria, fixtures de test | Cuando escribís tests |
+| `@kanjijs/cli` | Scaffolding (`kanji new`, `kanji g`), servidor dev, migraciones | Durante el desarrollo |
+| `@kanjijs/common` | Utilidades compartidas: `env()`, clases de error, decoradores | Siempre — usado por todos los packages |
+
+## Dependencias de Packages
+
+```
+@kanjijs/common (utilidades base)
+    ↑
+@kanjijs/core (DI + módulos)
+    ↑
+@kanjijs/platform-hono (HTTP)     @kanjijs/contracts (validación Zod)
+    ↑                                    ↑
+@kanjijs/store (base de datos)    @kanjijs/auth (JWT + OAuth)
+    ↑                                    ↑
+@kanjijs/openapi (spec + SDK)
+    ↑
+@kanjijs/cli (scaffolding)
+```
+
+**¿Por qué este orden?** Cada capa solo depende de las capas inferiores. `core` no sabe nada de HTTP. `platform-hono` no sabe nada de bases de datos. Esto permite intercambiar implementaciones sin afectar otras capas.
+
+## Principios Fundamentales
+
+### 1. Module-First
+
+Cada pieza de código vive en un módulo. Sin auto-registration. Sin providers globales. Si no está declarado en el array `providers` de un módulo, no existe en el contenedor DI.
+
+```typescript
+// ✅ Correcto — registro explícito
+@KanjijsModule({
+  providers: [UsersService],
+  controllers: [UsersController],
+})
+export class UsersModule {}
+
+// ❌ Incorrecto — auto-registration (no soportado)
+@Injectable()
+export class UsersService {} // No registrado en ningún lado
+```
+
+### 2. Contract-First
+
+Definí la forma de la API (esquemas Zod) antes de escribir implementación. El contrato es la fuente de verdad para validación, tipos, OpenAPI y SDK.
+
+### 3. DI Determinista
+
+Un contenedor DI por aplicación. Sin singletons globales. Esto permite aislamiento en tests — cada test obtiene su propio contenedor.
+
+### 4. Controllers Delgados
+
+Los controllers parsean input, llaman servicios, devuelven respuestas. Sin lógica de negocio. Sin queries a la base de datos.
+
+### 5. Repository Pattern
+
+El acceso a datos vive en repositories, no en services. El decorador `@Repository()` marca una clase como la capa de acceso a datos. Los services inyectan repositories y delegan todas las operaciones de DB. Esto mantiene la lógica de negocio limpia y el acceso a datos intercambiable.
+
+### 5. Seguridad por Defecto
+
+Auth, RBAC, ACL, rate limiting y security headers están integrados. Te desactivás, no activás.
+
+### 6. Performance por Defecto
+
+Sin reflection por request. Sin DI.resolve por request. Sin logs por defecto. El framework agrega overhead mínimo.
+
+### 7. Obsesión por la DX
+
+Scaffolding, hot reload, errores tipados, mensajes claros. Si algo sale mal, el error te dice exactamente qué arreglar.
+
+## ¿Por Qué Estas Decisiones?
+
+| Decisión | Por qué | Alternativas consideradas |
+|---|---|---|
+| Hono vs Express | 3-10x más rápido, TypeScript nativo, soporte Bun | Express, Fastify, NestJS |
+| Zod vs Joi/Yup | TypeScript-first, doble propósito (validación + tipos) | Joi, Yup, io-ts |
+| Drizzle vs Prisma | Ligero, sin codegen, control SQL directo | Prisma, TypeORM, Knex |
+| Module-first vs auto-registration | Capturar errores al bootstrap, no en runtime | Auto-registration (estilo NestJS) |
+| DI determinista | Permite aislamiento en tests, comportamiento predecible | Singleton global |
+| OpenAPI vs tRPC | Estándar de la industria, framework-agnostic, REST-compliant | tRPC, GraphQL |

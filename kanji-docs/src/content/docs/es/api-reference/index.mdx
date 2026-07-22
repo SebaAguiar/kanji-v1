@@ -1,0 +1,296 @@
+---
+title: Referencia de API
+description: Decoradores principales, funciones, context keys y clases de error
+---
+
+## @kanjijs/core
+
+### @Module / @KanjijsModule
+
+Define un módulo — el límite de configuración del contenedor de DI.
+
+```typescript
+@KanjijsModule({
+  imports?: Module[];           // Otros módulos de los que depende este módulo
+  providers?: Provider[];      // Servicios disponibles para inyección
+  controllers?: Controller[];  // Handlers de endpoints HTTP
+  exports?: Provider[];        // Providers compartidos con módulos que importen este
+  global?: boolean;            // Hace los providers disponibles en toda la app
+})
+```
+
+### @Injectable
+
+Marca una clase para que sea gestionada por el contenedor de DI.
+
+```typescript
+@Injectable()
+class UsersService {}
+```
+
+### @Inject
+
+Inyecta un valor por token (requerido cuando el token es un Symbol).
+
+```typescript
+constructor(@Inject(DATABASE_CLIENT) private db: Database)
+```
+
+---
+
+## @kanjijs/platform-hono
+
+### @Controller
+
+Define un controller HTTP con un prefijo de ruta.
+
+```typescript
+@Controller('prefix')
+class MyController {}
+```
+
+### Decoradores de Ruta
+
+```typescript
+@Get('/path')
+@Post('/path')
+@Put('/path')
+@Patch('/path')
+@Delete('/path')
+```
+
+### @Contract
+
+Valida el request contra un esquema Zod.
+
+```typescript
+@Contract(CreateUserContract)  // Por método
+@Contract('methodName')        // Combinado con @ContractOf
+```
+
+### @UseGuards
+
+Aplica guards de autenticación y permisos.
+
+```typescript
+@UseGuards(AuthGuard)                    // Un solo guard
+@UseGuards(AuthGuard, RolesGuard)        // Múltiples guards (se ejecutan en orden)
+@UseGuards(clp({ roles: ['admin'] }))    // CLP inline
+@UseGuards(acl({ policy: PostPolicy }))  // ACL inline
+```
+
+### @RateLimit
+
+Aplica rate limiting a un endpoint.
+
+```typescript
+@RateLimit({ windowMs: 60000, max: 100 })
+```
+
+### @WebSocketGateway
+
+Define un gateway de WebSocket.
+
+```typescript
+@WebSocketGateway('namespace')
+```
+
+### @WebSocketMessage
+
+Maneja un evento de mensaje específico.
+
+```typescript
+@WebSocketMessage('eventName')
+@WebSocketMessage('eventName', { schema: ZodSchema })
+```
+
+---
+
+## @kanjijs/contracts
+
+### @ContractOf
+
+Mapea nombres de contratos a métodos a nivel de controller.
+
+```typescript
+@ContractOf({
+  create: CreateUserContract,
+  findById: GetUserContract,
+})
+```
+
+### @Contract (a nivel de método)
+
+Vincula un contrato a un handler específico.
+
+```typescript
+@Contract('create')
+```
+
+---
+
+## @kanjijs/auth
+
+### AuthModule.forRoot()
+
+```typescript
+AuthModule.forRoot({
+  jwtSecret: string;              // Requerido: secreto para firmar JWT (mín. 32 caracteres)
+  previousSecrets?: string[];     // Opcional: para rotación sin downtime
+  providers?: {                   // Opcional: proveedores OAuth
+    github?: { clientId: string; clientSecret: string };
+    google?: { clientId: string; clientSecret: string };
+    microsoft?: { clientId: string; clientSecret: string };
+  };
+})
+```
+
+### Guards
+
+```typescript
+AuthGuard                           // Valida el token JWT
+clp({ roles: string[] })           // Class-Level Permissions (RBAC)
+acl({ policy: ResourcePolicy })    // Object-Level Permissions (ACL)
+```
+
+### Interfaz ResourcePolicy
+
+```typescript
+interface ResourcePolicy {
+  canRead?(c: AuthContext, resource: unknown, user: KanjiSession): boolean;
+  canUpdate?(c: AuthContext, resource: unknown, user: KanjiSession): boolean;
+  canDelete?(c: AuthContext, resource: unknown, user: KanjiSession): boolean;
+}
+```
+
+---
+
+## @kanjijs/store
+
+### StoreModule.forRoot()
+
+```typescript
+// PostgreSQL
+StoreModule.forRoot({
+  type: 'postgres',
+  connectionString: string,
+  schema: Record<string, PgTable>,  // Requerido para Postgres
+})
+
+// MongoDB
+StoreModule.forRoot({
+  type: 'mongodb',
+  connectionString: string,
+  dbName: string,
+})
+```
+
+### Token DATABASE_CLIENT
+
+```typescript
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+
+constructor(@Inject(DATABASE_CLIENT) private db: Database)
+```
+
+---
+
+## Context Keys
+
+### Autenticación
+
+| Key | Tipo | Descripción |
+|---|---|---|
+| `kanji.auth.user` | `{ id: string, email: string, name: string }` | Información básica del usuario |
+| `kanji.auth.session` | `KanjiSession` | Objeto de sesión completo |
+| `kanji.auth.roles` | `string[]` | Roles del usuario |
+| `kanji.auth.scopes` | `string[]` | Scopes OAuth |
+| `kanji.auth.principal` | `Principal` | Identidad normalizada |
+
+### Autorización
+
+| Key | Tipo | Descripción |
+|---|---|---|
+| `kanji.authz.cache` | `Map<string, Decision>` | Caché de ACL por request |
+| `kanji.authz.decision` | `Decision` | Última decisión de ACL |
+
+### Input Validado
+
+| Key | Tipo | Descripción |
+|---|---|---|
+| `kanji.validated.body` | `T` | Body del request tipado |
+| `kanji.validated.query` | `T` | Parámetros de query tipados |
+| `kanji.validated.params` | `T` | Parámetros de URL tipados |
+| `kanji.validated.headers` | `T` | Headers tipados |
+| `kanji.validated.cookies` | `T` | Cookies tipadas |
+
+### Metadatos
+
+| Key | Tipo | Descripción |
+|---|---|---|
+| `kanji.requestId` | `string` | UUID único del request |
+
+:::caution[Error tipográfico común]
+La key correcta es `kanji.validated.body` (con `d`), **NO** `kanji.validation.body`. Es un error frecuente que no lanza error de compilación pero simplemente no funciona.
+:::
+
+---
+
+## Clases de Error
+
+Se importan desde `@kanjijs/common`:
+
+```typescript
+import {
+  KanjiError,           // Clase base de errores
+  BadRequestError,      // 400
+  UnauthorizedError,    // 401
+  ForbiddenError,       // 403
+  NotFoundError,        // 404
+  ConflictError,        // 409
+  ValidationError,      // 422
+  InternalServerError,  // 500
+} from '@kanjijs/common';
+```
+
+### Forma Estándar de la Respuesta de Error
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "issues": [
+    {
+      "path": "body.email",
+      "code": "invalid_type",
+      "message": "Expected string, received number"
+    }
+  ]
+}
+```
+
+---
+
+## Variables de Entorno
+
+### env()
+
+Acceso tipado a variables de entorno con validación Zod:
+
+```typescript
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
+
+const dbUrl = env('DATABASE_URL', z.string().url());
+const port = env('PORT', z.coerce.number().default(3000));
+```
+
+### assertEnvValid()
+
+Llamá esta función en `main.ts` para validar todas las llamadas a `env()` al inicio de la aplicación:
+
+```typescript
+import { assertEnvValid } from '@kanjijs/common';
+
+assertEnvValid();  // Lanza error si alguna variable de entorno es inválida
+```

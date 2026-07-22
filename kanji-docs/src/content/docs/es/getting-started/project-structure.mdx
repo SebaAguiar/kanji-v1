@@ -1,0 +1,271 @@
+---
+title: Estructura del Proyecto
+description: Cómo se organiza un proyecto Kanji y por qué cada archivo importa
+---
+
+## Visión General
+
+Kanji sigue una **arquitectura modular basada en features**. Cada feature (users, posts, auth, etc.) vive en su propia carpeta con una convención estricta de archivos. Esto no es arbitrario — impone separación de responsabilidades y hace navegable el codebase.
+
+```
+my-app/
+├── src/
+│   ├── database/
+│   │   ├── schema.ts          # Definiciones de tablas Drizzle (Postgres) o tipos (MongoDB)
+│   │   └── migrations/        # Archivos de migración auto-generados
+│   ├── modules/
+│   │   ├── users/
+│   │   │   ├── users.contracts.ts  # Esquemas Zod — el contrato de la API
+│   │   │   ├── users.controller.ts # Handlers HTTP — delgados, sin lógica
+│   │   │   ├── users.service.ts    # Lógica de negocio — el cerebro
+│   │   │   ├── users.repository.ts # Acceso a datos — queries y mutaciones
+│   │   │   ├── users.module.ts     # Configuración del módulo — declaraciones DI
+│   │   │   └── index.ts            # Export barrel
+│   │   ├── posts/
+│   │   │   └── ...
+│   │   └── auth/
+│   │       └── auth.module.ts      # Configuración de auth
+│   ├── app.module.ts          # Módulo raíz — importa todo
+│   └── main.ts                # Entry point — crea el servidor
+├── tests/
+│   ├── unit/                  # Tests a nivel de servicio
+│   └── integration/           # Tests de endpoints HTTP
+├── .env                       # Variables de entorno (no se commitea)
+├── kanji.config.ts            # Configuración del CLI
+├── bunfig.toml
+├── package.json
+└── tsconfig.json
+```
+
+## Roles de cada Archivo
+
+### `main.ts` — El Entry Point
+
+Acá arranca la aplicación. Valida variables de entorno, construye el contenedor DI desde tu árbol de módulos, y arranca el servidor HTTP.
+
+```typescript
+import { KanjijsAdapter } from '@kanjijs/platform-hono';
+import { ZodValidator } from '@kanjijs/contracts';
+import { assertEnvValid } from '@kanjijs/common';
+import { AppModule } from './app.module';
+
+assertEnvValid();
+
+const { app } = await KanjijsAdapter.create(AppModule, {
+  validator: new ZodValidator(),
+});
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
+```
+
+**¿Por qué `assertEnvValid()` primero?** Porque si falta una variable de entorno requerida, querés saberlo inmediatamente al inicio — no cuando el primer request llega a un endpoint muerto.
+
+### `app.module.ts` — El Módulo Raíz
+
+Es la cúspide del árbol de módulos. Importa todos los módulos feature y los de infraestructura (base de datos, auth).
+
+```typescript
+import { KanjijsModule } from '@kanjijs/core';
+import { StoreModule } from '@kanjijs/store';
+import { AuthModule } from '@kanjijs/auth';
+import { UsersModule } from './modules/users/users.module';
+import { PostsModule } from './modules/posts/posts.module';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
+
+@KanjijsModule({
+  imports: [
+    StoreModule.forRoot({
+      type: 'postgres',
+      connectionString: env('DATABASE_URL', z.string().url()),
+      schema: { users, posts },  // Objetos de tablas Drizzle
+    }),
+    AuthModule.forRoot({
+      jwtSecret: env('JWT_SECRET', z.string().min(32)),
+      providers: {
+        github: {
+          clientId: env('GITHUB_CLIENT_ID', z.string()),
+          clientSecret: env('GITHUB_CLIENT_SECRET', z.string()),
+        },
+      },
+    }),
+    UsersModule,
+    PostsModule,
+  ],
+})
+export class AppModule {}
+```
+
+### `*.contracts.ts` — El Contrato de la API
+
+Define qué acepta y devuelve cada endpoint usando esquemas Zod. Esta es la **fuente de verdad única** — cumple tres propósitos simultáneamente:
+
+1. **Validación de requests HTTP** — Cuando un request llega al endpoint, el framework valida body, query, params y headers contra el contrato *antes* de que el controller se ejecute. Si `name` es requerido y el client no lo envía, el framework automáticamente retorna un `400` con errores por campo. Tu controller nunca ve datos inválidos.
+2. **Tipos TypeScript** — Los mismos esquemas Zod generan tipos TypeScript para tus controllers y services.
+3. **Spec OpenAPI + SDK** — El contrato genera la especificación OpenAPI y un SDK client tipado.
+
+```typescript
+import { z } from 'zod';
+
+export const CreateUserContract = {
+  method: 'POST' as const,
+  path: '/users',
+  request: {
+    body: z.object({
+      name: z.string().min(1),     // Requerido — 400 si falta o está vacío
+      email: z.string().email(),   // Requerido — 400 si falta o no es un email
+    }),
+  },
+  responses: {
+    201: z.object({ id: z.string().uuid(), name: z.string(), email: z.string() }),
+    400: z.object({ error: z.string(), issues: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })) }),
+  },
+};
+```
+
+:::tip[Qué ve el client]
+Si un client envía `POST /users` con `{ "name": "Alice" }` (sin `email`), el framework responde con `400` antes de que el controller se ejecute:
+```json
+{
+  "error": "Validation failed",
+  "issues": [{ "path": "email", "code": "invalid_type", "message": "Required" }]
+}
+```
+:::
+
+### `*.controller.ts` — La Capa HTTP
+
+Los controllers son **delgados**. Acceden a datos validados del contexto, llaman al servicio, y devuelven una respuesta. Sin lógica de negocio, sin queries a la base de datos.
+
+```typescript
+@Controller('/users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Post('/')
+  @Contract(CreateUserContract)
+  async create(c: Context) {
+    const body = c.get('kanji.validated.body');
+    const user = await this.usersService.create(body);
+    return c.json(user, 201);
+  }
+}
+```
+
+### `*.service.ts` — La Lógica de Negocio
+
+Los servicios son donde ocurren las decisiones. Son inyectables, testeables, y no tienen conocimiento de HTTP. Inyectan el repository para acceder a datos — nunca la base de datos directamente. Lanzan clases de error cuando algo sale mal — Kanji las captura y devuelve respuestas HTTP correctas.
+
+```typescript
+@Injectable()
+export class UsersService {
+  constructor(private readonly repository: UsersRepository) {}
+
+  async create(data: { name: string; email: string }) {
+    const existing = await this.repository.findByEmail(data.email);
+    if (existing) throw new ConflictError('El email ya está registrado');
+    return this.repository.create(data);
+  }
+}
+```
+
+### `*.repository.ts` — La Capa de Acceso a Datos
+
+Los repositories manejan todas las operaciones de base de datos. Son inyectables vía `@Repository()` y reciben el cliente de DB a través del DI. Los services nunca tocan la DB — delegan al repository.
+
+```typescript
+@Repository()
+export class UsersRepository {
+  constructor(
+    @Inject(DATABASE_CLIENT)
+    private readonly db: Database,
+  ) {}
+
+  async create(data: { name: string; email: string }) {
+    const id = crypto.randomUUID();
+    await this.db.query.users.insert({ id, ...data });
+    return { id, ...data };
+  }
+
+  async findByEmail(email: string) {
+    return this.db.query.users.findBy({ email });
+  }
+}
+```
+
+### `*.module.ts` — La Conexión
+
+Los módulos declaran qué provee esta feature y qué necesita. Son la configuración DI. Los repositories van en `repositories`, los services en `providers` — cada array tiene significado semántico.
+
+```typescript
+@KanjijsModule({
+  controllers: [UsersController],
+  repositories: [UsersRepository],
+  providers: [UsersService],
+  exports: [UsersService],  // Exportar si otros módulos necesitan este servicio
+})
+export class UsersModule {}
+```
+
+### `database/schema.ts` — La Capa de Datos
+
+Para PostgreSQL, contiene definiciones de tablas Drizzle. Para MongoDB, definís interfaces TypeScript en su lugar.
+
+```typescript
+// PostgreSQL
+import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 256 }).notNull(),
+  email: varchar('email', { length: 256 }).notNull().unique(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Inferir tipos del esquema — sin interfaces manuales
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+```
+
+## ¿Por Qué Esta Estructura?
+
+| Principio | Cómo la estructura lo impone |
+|---|---|
+| **Separación de responsabilidades** | Cada archivo tiene un solo trabajo. Controllers no hacen lógica de negocio. Services no conocen HTTP. Repositories no conocen reglas de negocio. |
+| **Contract-first** | Los contratos se definen primero y son usados por controllers, OpenAPI y SDK. |
+| **Límites DI** | Los módulos controlan qué es visible. Services no pueden acceder a internos de otros módulos sin `exports` explícito. |
+| **Testeabilidad** | Cada capa puede testearse en aislamiento. Services con unit tests, controllers con integration tests, repositories con tests de DB. |
+| **Navegabilidad** | `users.controller.ts` siempre significa la capa HTTP para users. `users.repository.ts` siempre significa acceso a datos. Sin buscar entre archivos mezclados. |
+
+## Escalabilidad
+
+Para proyectos con muchas features, organizá por dominio:
+
+```
+src/modules/
+├── users/
+│   ├── users.module.ts
+│   ├── users.controller.ts
+│   ├── users.service.ts
+│   ├── users.repository.ts
+│   └── users.contracts.ts
+├── posts/
+│   ├── posts.module.ts
+│   ├── posts.controller.ts
+│   ├── posts.service.ts
+│   ├── posts.repository.ts
+│   └── posts.contracts.ts
+└── auth/
+    └── auth.module.ts
+```
+
+Cuando llegues a 50+ endpoints, considerá dividir en sub-módulos dentro de cada feature.
+
+## ¿Qué sigue?
+
+- [Conceptos Principales](/es/core-concepts/architecture) — Conocé las capas de arquitectura
+- [Sistema de Módulos](/es/core-concepts/modules) — Entendé cómo se conectan los módulos
+- [Contratos](/es/core-concepts/contracts) — Inmersión en desarrollo contract-first

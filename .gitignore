@@ -145,5 +145,3 @@ vite.config.ts.timestamp-*
 # Agent command temp scripts
 .commandcode/
 
-# Documentation site (separate Astro project)
-kanji-docs/

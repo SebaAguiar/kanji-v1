@@ -1,0 +1,227 @@
+---
+title: Seguridad
+description: Headers de seguridad, rate limiting, RBAC, ACL y hardening para producción
+---
+
+## Headers de Seguridad
+
+Kanji incluye middleware de headers de seguridad por defecto. Cada respuesta incluye:
+
+| Header | Valor | Propósito |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | Previene sniffing de tipo MIME |
+| `X-Frame-Options` | `DENY` | Previene clickjacking |
+| `X-XSS-Protection` | `1; mode=block` | Habilita el filtro XSS del navegador |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Fuerza HTTPS |
+
+Estos se aplican globalmente — no se necesita configuración.
+
+## Rate Limiting
+
+Protegé los endpoints del abuso con el decorador `@RateLimit`:
+
+```typescript
+import { Controller } from '@kanjijs/platform-hono';
+import { RateLimit } from '@kanjijs/platform-hono';
+
+// A nivel de controller: todas las rutas de este controller
+@Controller('api')
+@RateLimit({ windowMs: 60000, max: 100 })  // 100 requests por minuto
+export class ApiController { /* ... */ }
+```
+
+```typescript
+// A nivel de ruta: solo un endpoint específico
+@Post('/login')
+@RateLimit({ windowMs: 900000, max: 5 })  // 5 intentos por 15 minutos
+async login(c: Context) { /* ... */ }
+```
+
+### Configuración de Rate Limit
+
+| Parámetro | Descripción | Ejemplo |
+|---|---|---|
+| `windowMs` | Ventana de tiempo en milisegundos | `60000` = 1 minuto |
+| `max` | Máximo de requests por ventana | `100` |
+
+### Patrones Comunes de Rate Limit
+
+```typescript
+// Endpoints de API: 100 req/min
+@RateLimit({ windowMs: 60000, max: 100 })
+
+// Intentos de login: 5 por 15 minutos
+@RateLimit({ windowMs: 900000, max: 5 })
+
+// Reset de contraseña: 3 por hora
+@RateLimit({ windowMs: 3600000, max: 3 })
+
+// Lecturas públicas: 200 por minuto
+@RateLimit({ windowMs: 60000, max: 200 })
+```
+
+## RBAC (Control de Acceso Basado en Roles)
+
+RBAC restringe el acceso basándose en roles de usuario. Kanji lo implementa vía CLP (Permisos a Nivel de Clase):
+
+```typescript
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard, clp } from '@kanjijs/auth';
+
+// Solo admins pueden acceder a este controller
+@Controller('/admin')
+@UseGuards(AuthGuard, clp({ roles: ['admin'] }))
+export class AdminController { /* ... */ }
+
+// Moderadores o admins pueden acceder
+@Controller('/moderation')
+@UseGuards(AuthGuard, clp({ roles: ['admin', 'moderator'] }))
+export class ModerationController { /* ... */ }
+```
+
+### Cómo Funciona CLP
+
+1. `AuthGuard` resuelve el usuario desde el JWT
+2. `clp()` verifica `c.get('kanji.auth.roles')` contra los roles requeridos
+3. Si no hay coincidencia → 403 Forbidden (el handler nunca se ejecuta)
+
+### Asignar Roles
+
+Los roles se asignan cuando el usuario se autentica. Vienen del payload del JWT:
+
+```typescript
+// En tu servicio de auth
+const token = jwt.sign({
+  sub: user.id,
+  email: user.email,
+  roles: ['admin'],  // ← Estos son los que verifica clp()
+}, secret);
+```
+
+## ACL (Listas de Control de Acceso)
+
+ACL provee permisos a nivel de **objeto** — verificando si un usuario puede acceder a un recurso **específico**, no solo al endpoint:
+
+```typescript
+import { Injectable } from '@kanjijs/core';
+import type { ResourcePolicy, AuthContext, KanjiSession } from '@kanjijs/auth';
+
+@Injectable()
+export class PostPolicy implements ResourcePolicy {
+  canRead(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Los posts publicados son públicos, los borradores solo para el dueño
+    return resource.published || resource.userId === user.id;
+  }
+
+  canUpdate(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // El dueño o un admin puede actualizar
+    return resource.userId === user.id || user.roles.includes('admin');
+  }
+
+  canDelete(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Solo admin puede borrar
+    return user.roles.includes('admin');
+  }
+}
+```
+
+### Usar ACL en Controllers
+
+```typescript
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard, acl } from '@kanjijs/auth';
+
+@Controller('/posts')
+export class PostsController {
+  @Put('/:id')
+  @UseGuards(AuthGuard, acl({ policy: PostPolicy }))
+  @Contract(UpdatePostContract)
+  async update(c: Context) {
+    // PostPolicy.canUpdate() se verifica ANTES de que esto se ejecute
+    // Si retorna false → 403 Forbidden
+    const { id } = c.get('kanji.validated.params');
+    const body = c.get('kanji.validated.body');
+    return c.json(await this.postsService.update(id, body));
+  }
+}
+```
+
+### CLP vs ACL
+
+| | CLP (Nivel de Clase) | ACL (Nivel de Objeto) |
+|---|---|---|
+| **Verifica** | "¿Puede este rol acceder a este endpoint?" | "¿Puede este usuario acceder a ESTE objeto?" |
+| **Alcance** | Controller o ruta completa | Instancia individual de recurso |
+| **Caso de uso** | Paneles admin, endpoints restringidos por rol | Edición solo para el dueño, recursos compartidos |
+| **Ejemplo** | `clp({ roles: ['admin'] })` | `acl({ policy: PostPolicy })` |
+
+## Mejores Prácticas de Seguridad
+
+### 1. Nunca Guardes Secretos en el Código
+
+```typescript
+// ❌ Secretos hardcodeados
+const jwtSecret = 'my-super-secret-key';
+
+// ✅ Variables de entorno con validación
+const jwtSecret = env('JWT_SECRET', z.string().min(32));
+```
+
+### 2. Validá Todas las Entradas
+
+Usá contratos (schemas Zod) en cada endpoint. Kanji valida automáticamente:
+
+```typescript
+@Post('/')
+@Contract(CreateUserContract)  // Valida el body, retorna 400 si es inválido
+async create(c: Context) {
+  // c.get('kanji.validated.body') es guaranteed válido
+}
+```
+
+### 3. Usá HTTPS en Producción
+
+Siempre. Sin excepciones. El header HSTS fuerza esto en los navegadores.
+
+### 4. Rotá los JWT Secrets
+
+Usá `previousSecrets` para rotación sin downtime:
+
+```typescript
+AuthModule.forRoot({
+  jwtSecret: env('NEW_SECRET', z.string().min(32)),
+  previousSecrets: [env('OLD_SECRET', z.string())],
+})
+```
+
+### 5. Aplicá el Principio de Menor Privilegio
+
+```typescript
+// ❌ Demasiado amplio
+clp({ roles: ['admin', 'user', 'guest'] })
+
+// ✅ Específico
+clp({ roles: ['admin'] })
+```
+
+### 6. Rate Limit en Endpoints Sensibles
+
+```typescript
+@Post('/login')
+@RateLimit({ windowMs: 900000, max: 5 })  // 5 intentos por 15 min
+async login(c: Context) { /* ... */ }
+
+@Post('/password-reset')
+@RateLimit({ windowMs: 3600000, max: 3 })  // 3 por hora
+async resetPassword(c: Context) { /* ... */ }
+```
+
+### 7. Usá Clases de Error, No Strings Crudos
+
+```typescript
+// ❌ Expone detalles de implementación
+throw new Error('Database connection failed');
+
+// ✅ Mensajes de error seguros
+throw new NotFoundError('User not found');
+```

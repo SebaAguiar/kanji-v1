@@ -1,0 +1,245 @@
+---
+title: OpenAPI & SDK
+description: Generate OpenAPI specs and type-safe TypeScript clients from your Zod contracts
+---
+
+## Overview
+
+Kanji generates two things from your Zod contracts:
+
+1. **OpenAPI Spec** — Industry-standard API documentation (Swagger/ReDoc)
+2. **TypeScript SDK** — Fully typed client for frontend consumption
+
+**One source of truth (your contracts) → Two outputs (spec + SDK).**
+
+## The Flow
+
+```
+Your Zod contracts (source of truth)
+    ↓
+@Contract() decorators (metadata collection)
+    ↓
+kanji openapi:generate (scan all contracts)
+    ↓
+openapi.json (OpenAPI 3.0 spec)
+    ↓
+kanji sdk:generate (consume spec)
+    ↓
+TypeScript SDK (fully typed client)
+```
+
+## Generate OpenAPI Spec
+
+```bash
+kanji openapi:generate
+```
+
+This scans all `@Contract()` decorators in your codebase and creates `openapi.json`:
+
+```json
+{
+  "openapi": "3.0.0",
+  "info": { "title": "My API", "version": "1.0.0" },
+  "paths": {
+    "/users": {
+      "post": {
+        "summary": "Create user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created" },
+          "400": { "description": "Validation error" }
+        }
+      }
+    }
+  }
+}
+```
+
+### Options
+
+```bash
+kanji openapi:generate --output ./docs/api.json    # Custom output path
+kanji openapi:generate --check                      # Validate only (for CI)
+```
+
+## Generate TypeScript SDK
+
+```bash
+kanji sdk:generate
+```
+
+This creates a typed client in `sdk/`:
+
+```typescript
+// sdk/index.ts — Generated file
+import { createKanjiClient } from './client';
+
+export { createKanjiClient };
+export type { CreateUserRequest, CreateUserResponse, GetUserRequest, GetUserResponse };
+```
+
+### Usage in Frontend
+
+```typescript
+import { createKanjiClient } from './sdk';
+
+const client = createKanjiClient({ baseUrl: 'http://localhost:3000' });
+
+// Fully typed — autocomplete works, types are enforced
+const user = await client.users.create({
+  body: { name: 'John', email: 'john@example.com' },
+});
+// user is typed as { id: string; name: string; email: string }
+
+// Error handling — types include error responses
+try {
+  const user = await users.create({ body: { name: '' } });
+} catch (error) {
+  // error is typed as { error: string; issues: Array<{ path, code, message }> }
+}
+```
+
+### Options
+
+```bash
+kanji sdk:generate --output ../frontend/src/api.ts    # Custom output path
+```
+
+## Serve API Documentation
+
+```bash
+kanji openapi:serve
+```
+
+Opens Swagger UI at `http://localhost:3000/docs`. Your API is now browsable with interactive documentation.
+
+### Options
+
+```bash
+kanji openapi:serve --port 3001          # Custom port
+kanji openapi:serve --ui redoc           # Use ReDoc instead of Swagger
+```
+
+## CI Integration
+
+Add to your CI pipeline to ensure the spec stays up to date:
+
+```yaml
+# .github/workflows/ci.yml
+- name: Validate OpenAPI spec
+  run: kanji openapi:generate --check
+```
+
+This **fails the build** if the spec is outdated (contracts changed but spec wasn't regenerated).
+
+### Full CI Workflow
+
+```yaml
+- name: Install dependencies
+  run: bun install
+
+- name: Lint
+  run: bun run lint
+
+- name: Type check
+  run: bun run typecheck
+
+- name: Test
+  run: bun test
+
+- name: Validate OpenAPI spec
+  run: kanji openapi:generate --check
+
+- name: Build
+  run: bun run build
+```
+
+## Enhancing Documentation
+
+### Adding Examples
+
+Use the `@Example` decorator to add example values to your OpenAPI spec:
+
+```typescript
+import { Example } from '@kanjijs/openapi';
+
+export const CreateUserContract = {
+  method: 'POST' as const,
+  path: '/users',
+  request: {
+    body: z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    }),
+  },
+  responses: {
+    201: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string(),
+    }),
+  },
+  // Example value appears in Swagger UI
+  example: {
+    summary: 'Create a new user',
+    value: {
+      name: 'John Doe',
+      email: 'john@example.com',
+    },
+  },
+};
+```
+
+### Adding Descriptions
+
+```typescript
+export const ListUsersContract = {
+  method: 'GET' as const,
+  path: '/users',
+  request: {
+    query: z.object({
+      page: z.coerce.number().int().positive().default(1)
+        .describe('Page number (1-indexed)'),
+      limit: z.coerce.number().int().min(1).max(100).default(20)
+        .describe('Items per page (max 100)'),
+    }),
+  },
+  responses: {
+    200: z.object({
+      data: z.array(UserSchema),
+      total: z.number().describe('Total number of users'),
+      page: z.number(),
+    }),
+  },
+};
+```
+
+## After Every Contract Change
+
+```bash
+# Regenerate both spec and SDK
+kanji openapi:generate && kanji sdk:generate --output ../frontend/src/api.ts
+```
+
+The types propagate automatically. If you add a new field to a contract, the SDK picks it up on regeneration.
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| Outdated spec | Frontend SDK types don't match API | Re-run `kanji openapi:generate` |
+| Missing `method`/`path` in contract | Endpoint not in spec | Add `method` and `path` to every contract |
+| Forgetting to regenerate | CI fails with `--check` | Run `kanji openapi:generate` before committing |
+| No error responses in contract | SDK doesn't know about error types | Add 400/401/404/409 response schemas |

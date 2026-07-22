@@ -1,0 +1,163 @@
+---
+title: Architecture
+description: How Kanji Framework is designed and why each decision was made
+---
+
+## Design Philosophy
+
+Kanji is built on four pillars:
+
+1. **Velocity without compromise** — Ship features 10x faster than traditional frameworks. Zero boilerplate, contract-first, CLI scaffolding.
+2. **Type-safe end-to-end** — Types flow from Zod contracts → runtime validation → OpenAPI spec → TypeScript SDK. One definition, four outputs.
+3. **Modular by design** — Strict boundaries between features. No auto-registration, no global state, no magic. Everything is explicit.
+4. **Security by default** — Auth, RBAC, ACL, rate limiting, and security headers built-in. Not optional add-ons.
+
+## The Request Pipeline
+
+Every HTTP request flows through this exact pipeline:
+
+```
+Client Request
+    ↓
+Global Middleware (requestId, cors, logger, security headers)
+    ↓
+Auth Middleware (resolve principal from JWT token)
+    ↓
+CLP — Class-Level Permissions ("can this user access this resource at all?")
+    ↓
+Contract Validation (Zod schemas validate body, params, query, headers)
+    ↓
+ACL — Object-Level Permissions ("can this user access THIS specific object?")
+    ↓
+Controller Handler (parse validated data, call service)
+    ↓
+Service (business logic, orchestration)
+    ↓
+Repository (data access, queries, mutations)
+    ↓
+Database (PostgreSQL / MongoDB)
+    ↓
+Response Serialization
+    ↓
+Exception Filter (if error → structured HTTP response)
+```
+
+**Key insight:** Validation, auth, and permissions are NOT your responsibility in the handler. They're handled by middleware and decorators. Your handler only does business logic. Database access lives in the Repository layer — Services never touch the DB directly.
+
+## Architecture Layers
+
+```
+┌─────────────────────────────────────────────┐
+│              Application Layer              │
+│  Controllers, Services, Repositories        │
+│  (Your code lives here)                     │
+├─────────────────────────────────────────────┤
+│            Contract Layer (Zod)             │
+│    Validation + Types + OpenAPI Spec        │
+│    (Single source of truth for your API)    │
+├─────────────────────────────────────────────┤
+│             Platform Layer (Hono)           │
+│    HTTP Router, Middleware, WebSocket       │
+│    (Handles all HTTP/WS concerns)           │
+├─────────────────────────────────────────────┤
+│             Core Layer (DI Container)       │
+│    Module System, Dependency Injection      │
+│    (Wires everything together)              │
+├─────────────────────────────────────────────┤
+│              Store Layer                    │
+│    PostgreSQL (Drizzle ORM) / MongoDB       │
+│    (Database abstraction)                   │
+└─────────────────────────────────────────────┘
+```
+
+## Package Ecosystem
+
+Each package has a single responsibility:
+
+| Package | Purpose | When you use it |
+|---|---|---|
+| `@kanjijs/core` | Module system, DI container, decorators (`@Module`, `@Injectable`, `@Repository`, `@Inject`) | Always — it's the foundation |
+| `@kanjijs/platform-hono` | Hono adapter, HTTP metadata (`@Controller`, `@Get`, `@Post`), WebSocket gateways | Always — it's the HTTP layer |
+| `@kanjijs/contracts` | Zod validation, `@Contract()` decorator, `ZodValidator` | Always — contract-first development |
+| `@kanjijs/auth` | JWT sessions, OAuth 2.0 (Google, GitHub, Microsoft), RBAC, ACL guards | When you need authentication |
+| `@kanjijs/store` | Database abstraction — PostgreSQL (Drizzle) and MongoDB adapters | When you need a database |
+| `@kanjijs/openapi` | OpenAPI spec generation, TypeScript SDK generation | When you need API docs or frontend clients |
+| `@kanjijs/testing` | `TestingModuleBuilder`, in-memory DB, test fixtures | When you write tests |
+| `@kanjijs/cli` | Scaffolding (`kanji new`, `kanji g`), dev server, migrations | During development |
+| `@kanjijs/common` | Shared utilities: `env()`, error classes, decorators | Always — used by all packages |
+
+## Package Dependencies
+
+```
+@kanjijs/common (foundation utilities)
+    ↑
+@kanjijs/core (DI + modules)
+    ↑
+@kanjijs/platform-hono (HTTP)     @kanjijs/contracts (Zod validation)
+    ↑                                    ↑
+@kanjijs/store (database)         @kanjijs/auth (JWT + OAuth)
+    ↑                                    ↑
+@kanjijs/openapi (spec + SDK generation)
+    ↑
+@kanjijs/cli (scaffolding)
+```
+
+**Why this order?** Each layer only depends on layers below it. `core` knows nothing about HTTP. `platform-hono` knows nothing about databases. This means you can swap implementations without affecting other layers.
+
+## Core Principles
+
+### 1. Module-First
+
+Every piece of code lives in a module. No auto-registration. No global providers. If it's not declared in a module's `providers` array, it doesn't exist in the DI container.
+
+```typescript
+// ✅ Correct — explicit registration
+@KanjijsModule({
+  providers: [UsersService],
+  controllers: [UsersController],
+})
+export class UsersModule {}
+
+// ❌ Wrong — auto-registration (not supported)
+@Injectable()
+export class UsersService {} // Not registered anywhere
+```
+
+### 2. Contract-First
+
+Define the API shape (Zod schemas) before writing any implementation. The contract is the source of truth for validation, types, OpenAPI, and SDK.
+
+### 3. Deterministic DI
+
+One DI container per application. No global singletons. This enables test isolation — each test gets its own container.
+
+### 4. Thin Controllers
+
+Controllers parse input, call services, return responses. No business logic. No database queries. No conditional branching.
+
+### 5. Repository Pattern
+
+Data access lives in repositories, not services. The `@Repository()` decorator marks a class as the data access layer. Services inject repositories and delegate all DB operations to them. This keeps business logic clean and data access swappable.
+
+### 5. Secure by Default
+
+Auth, RBAC, ACL, rate limiting, and security headers are built-in. You opt-out, not opt-in.
+
+### 6. Performance by Default
+
+No reflection per request. No DI.resolve per request. No logs by default. The framework adds minimal overhead.
+
+### 7. Developer Experience Obsession
+
+Scaffolding, hot reload, typed errors, clear messages. If something goes wrong, the error tells you exactly what to fix.
+
+## Why These Decisions?
+
+| Decision | Why | Alternatives considered |
+|---|---|---|
+| Hono over Express | 3-10x faster, native TypeScript, Bun support | Express, Fastify, NestJS |
+| Zod over Joi/Yup | TypeScript-first, dual purpose (validation + types) | Joi, Yup, io-ts |
+| Drizzle over Prisma | Lightweight, no codegen, direct SQL control | Prisma, TypeORM, Knex |
+| Module-first over auto-registration | Catch errors at bootstrap, not at runtime | Auto-registration (NestJS-style) |
+| Deterministic DI | Enables test isolation, predictable behavior | Global singleton |
+| OpenAPI over tRPC | Industry standard, framework-agnostic, REST-compliant | tRPC, GraphQL |

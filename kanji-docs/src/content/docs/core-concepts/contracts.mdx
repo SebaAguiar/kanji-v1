@@ -1,0 +1,292 @@
+---
+title: Contracts
+description: Contract-first development with Zod — the single source of truth for your API
+---
+
+## What Are Contracts?
+
+Contracts define your API's shape using Zod schemas. They are the **single source of truth** — one definition that powers four things:
+
+1. **Runtime validation** — Invalid requests get rejected before reaching your handler
+2. **TypeScript types** — Inferred from Zod schemas, no manual interfaces
+3. **OpenAPI spec** — Auto-generated for API documentation
+4. **TypeScript SDK** — Auto-generated typed client for frontend consumption
+
+**One definition. Four outputs. Zero duplication.**
+
+## Contract Shape
+
+Every contract has four parts: `method`, `path`, `request`, and `responses`.
+
+```typescript
+import { z } from 'zod';
+
+export const CreateUserContract = {
+  // HTTP method — determines the route decorator to use
+  method: 'POST' as const,
+
+  // URL path — supports params like :id
+  path: '/users',
+
+  // Request shape — what the client sends
+  request: {
+    body: z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      role: z.enum(['user', 'admin']).default('user'),
+    }),
+    // Optional: params, query, headers, cookies
+    // params: z.object({ id: z.string().uuid() }),
+    // query: z.object({ include: z.string().optional() }),
+  },
+
+  // Response shapes — keyed by HTTP status code
+  responses: {
+    201: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string(),
+      role: z.string(),
+    }),
+    400: z.object({
+      error: z.string(),
+      issues: z.array(z.object({
+        path: z.string(),
+        code: z.string(),
+        message: z.string(),
+      })),
+    }),
+    409: z.object({
+      error: z.string(),
+      message: z.string(),
+    }),
+  },
+};
+```
+
+### Why `method` and `path` in the Contract?
+
+Because Kanji uses them to:
+- Auto-generate OpenAPI specs (the contract IS the route definition)
+- Register routes on the Hono router
+- Map HTTP methods to controller decorators
+
+## Request Validation
+
+The `request` object defines what the client must send:
+
+```typescript
+request: {
+  body: z.object({ ... }),      // POST/PUT/PATCH body
+  params: z.object({ ... }),    // URL parameters (/users/:id)
+  query: z.object({ ... }),     // Query string (?page=1&limit=20)
+  headers: z.object({ ... }),   // Custom headers
+  cookies: z.object({ ... }),   // Cookies
+}
+```
+
+All fields are optional — only validate what you need.
+
+### Common Patterns
+
+```typescript
+// Pagination with defaults
+query: z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+}),
+
+// UUID path parameter
+params: z.object({
+  id: z.string().uuid(),
+}),
+
+// Flexible date input
+body: z.object({
+  startDate: z.coerce.date(),  // Accepts strings, timestamps, Date objects
+}),
+```
+
+## Response Shapes
+
+Responses are keyed by HTTP status code. This enables:
+- Accurate OpenAPI documentation
+- Type-safe SDK generation (different types per status code)
+- Clear contract between frontend and backend
+
+```typescript
+responses: {
+  200: z.object({ data: z.array(UserSchema) }),        // Success
+  400: z.object({ error: z.string(), issues: z.array(IssueSchema) }),  // Validation error
+  401: z.object({ error: z.string(), message: z.string() }),           // Unauthorized
+  404: z.object({ error: z.string(), message: z.string() }),           // Not found
+  409: z.object({ error: z.string(), message: z.string() }),           // Conflict
+},
+```
+
+## Using Contracts in Controllers
+
+### Option 1: Per-Method with `@Contract()`
+
+```typescript
+import { Controller, Get, Post, Contract } from '@kanjijs/platform-hono';
+import { Context } from 'hono';
+
+@Controller('/users')
+export class UsersController {
+  @Post('/')
+  @Contract(CreateUserContract)  // Validates body against CreateUserContract
+  async create(c: Context) {
+    const body = c.get('kanji.validated.body');  // Typed as z.infer<typeof schema>
+    // ...
+  }
+
+  @Get('/:id')
+  @Contract(GetUserContract)  // Validates params against GetUserContract
+  async findById(c: Context) {
+    const { id } = c.get('kanji.validated.params');  // Typed as { id: string }
+    // ...
+  }
+}
+```
+
+### Option 2: Controller-Level with `@ContractOf()`
+
+```typescript
+@Controller('/users')
+@ContractOf({
+  create: CreateUserContract,
+  findById: GetUserContract,
+  list: ListUsersContract,
+})
+export class UsersController {
+  @Post('/')
+  @Contract('create')
+  async create(c: Context) {
+    const body = c.get('kanji.validated.body');
+    // ...
+  }
+
+  @Get('/:id')
+  @Contract('findById')
+  async findById(c: Context) {
+    const { id } = c.get('kanji.validated.params');
+    // ...
+  }
+}
+```
+
+## Accessing Validated Data
+
+After contract middleware runs, validated data is available via context keys:
+
+```typescript
+c.get('kanji.validated.body')     // Typed request body
+c.get('kanji.validated.query')    // Typed query parameters
+c.get('kanji.validated.params')   // Typed URL parameters
+c.get('kanji.validated.headers')  // Typed headers
+c.get('kanji.validated.cookies')  // Typed cookies
+```
+
+:::caution[Common mistake]
+The key is `kanji.validated.body`, NOT `kanji.validation.body` (no `d`). This is the most common typo.
+:::
+
+## Validation Flow
+
+```
+Request arrives
+    ↓
+@Contract() middleware intercepts
+    ↓
+Zod schema validates request data
+    ↓
+├── Valid → Store in context keys → Execute handler
+└── Invalid → Return 400 with structured errors → Handler NOT called
+```
+
+The handler **never runs** for invalid requests. This means you can safely assume `c.get('kanji.validated.body')` is always valid and typed.
+
+## Standard Error Response
+
+When validation fails, Kanji returns a structured 400 response:
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "issues": [
+    {
+      "path": "body.email",
+      "code": "invalid_type",
+      "message": "Expected string, received number"
+    },
+    {
+      "path": "body.name",
+      "code": "too_small",
+      "message": "String must contain at least 1 character"
+    }
+  ]
+}
+```
+
+Each issue includes:
+- `path` — Where the error occurred (dot notation: `body.email`)
+- `code` — Zod error code (`invalid_type`, `too_small`, etc.)
+- `message` — Human-readable error description
+
+## Contracts Generate OpenAPI
+
+From these Zod schemas, Kanji generates a complete OpenAPI 3.0 spec:
+
+```bash
+kanji openapi:generate  # Creates openapi.json
+```
+
+The spec includes:
+- All endpoints with methods and paths
+- Request/response schemas (converted from Zod)
+- Authentication requirements
+- Example values
+
+## Contracts Generate SDK
+
+From the OpenAPI spec, Kanji generates a typed TypeScript client:
+
+```bash
+kanji sdk:generate --output ../frontend/src/api.ts
+```
+
+```typescript
+import { createKanjiClient } from './api';
+
+const client = createKanjiClient({ baseUrl: 'http://localhost:3000' });
+
+// Fully typed — user has { id, name, email, role }
+const user = await client.users.create({
+  body: { name: 'John', email: 'john@example.com' },
+});
+```
+
+## Contract-First Workflow
+
+```
+1. Define contract (Zod schema)
+2. Implement service (business logic)
+3. Wire controller (thin handler)
+4. Run kanji openapi:generate
+5. Run kanji sdk:generate
+6. Frontend uses typed SDK
+```
+
+If you change the contract, regenerate the spec and SDK. The types propagate automatically.
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| Missing `method`/`path` | OpenAPI spec incomplete, routes not registered | Add `method` and `path` to every contract |
+| Wrong context key | `c.get('kanji.validated.body')` returns undefined | Use `kanji.validated` (with `d`) |
+| No `@Contract()` on route | Validation skipped, handler gets raw data | Add `@Contract()` to every handler |
+| Manual validation in handler | Redundant code, no OpenAPI generation | Use `@Contract()` — middleware handles it |
+| Missing error responses | SDK doesn't know about error types | Add 400/401/404/409 response schemas |

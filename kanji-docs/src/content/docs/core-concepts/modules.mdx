@@ -1,0 +1,210 @@
+---
+title: Module System
+description: How Kanji's modular architecture manages boundaries, dependencies, and visibility
+---
+
+## Overview
+
+Every Kanji application is composed of modules. Modules are not just organizational folders — they're **DI configuration boundaries** that control what services exist, what they can access, and what they expose to other modules.
+
+## Defining a Module
+
+```typescript
+import { KanjijsModule } from '@kanjijs/core';
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
+import { UsersRepository } from './users.repository';
+
+@KanjijsModule({
+  controllers: [UsersController],
+  repositories: [UsersRepository],
+  providers: [UsersService],
+})
+export class UsersModule {}
+```
+
+This declares: "This module provides `UsersService` via `UsersRepository` and exposes `UsersController` for HTTP routing."
+
+## Module Properties
+
+| Property | Purpose | Required |
+|---|---|---|
+| `imports` | Other modules this module depends on | No |
+| `controllers` | HTTP endpoint handlers | No |
+| `gateways` | WebSocket gateway handlers | No |
+| `repositories` | Data access classes (decorated with `@Repository()`) | No |
+| `providers` | Services/classes available for injection **within this module** | No |
+| `exports` | Providers made available to modules that import this one | No |
+| `global` | If `true`, providers are available everywhere without explicit import | No |
+
+## Provider Visibility Rules
+
+A provider is visible to a module if **any** of these are true:
+
+1. **It's defined in the module's own `providers` array** — Local providers are always visible.
+2. **It's exported by a module in the `imports` array** — Imported + exported = visible.
+3. **It's in a global module** — Global providers are visible everywhere.
+
+```typescript
+// Module A
+@KanjijsModule({
+  providers: [ServiceA],
+  exports: [ServiceA],  // Makes ServiceA visible to importers
+})
+export class ModuleA {}
+
+// Module B — can use ServiceA
+@KanjijsModule({
+  imports: [ModuleA],  // Now ServiceA is visible here
+})
+export class ModuleB {}
+```
+
+If a provider is **not** visible, the DI container throws an error at startup: "Provider not found." This is a safety net — it catches wiring errors before they reach production.
+
+## Exports — Sharing Providers Across Modules
+
+By default, providers are **private** to their module. To share a service with other modules, you must explicitly `exports` it:
+
+```typescript
+@KanjijsModule({
+  providers: [UsersService],
+  exports: [UsersService],  // Other modules can now inject UsersService
+})
+export class UsersModule {}
+```
+
+Without `exports`, any module trying to inject `UsersService` will fail at startup.
+
+**When to export:**
+- A service is used by multiple features (e.g., `UsersService` is used by both `PostsModule` and `NotificationsModule`)
+- A repository or database client needs to be shared
+
+**When NOT to export:**
+- A service is only used within its own module
+- Exporting would expose implementation details (prefer interfaces/tokens)
+
+## Global Modules
+
+Some modules are cross-cutting — their providers should be available everywhere without explicit import:
+
+```typescript
+@KanjijsModule({ global: true })
+export class DatabaseModule {}
+```
+
+**Only three modules should be global:**
+
+| Module | Why global |
+|---|---|
+| `DatabaseModule` (`@kanjijs/store`) | Every feature needs database access |
+| `AuthModule` (`@kanjijs/auth`) | Auth guards are used across all controllers |
+| `ConfigModule` | Configuration is accessed everywhere |
+
+:::caution[Don't overuse global]
+Global modules break encapsulation. Any module can access any global provider without declaring the dependency. This makes it harder to understand what a module needs just by reading its `imports`. Use global sparingly.
+:::
+
+## Dynamic Modules with `forRoot()`
+
+Modules that need configuration at import time use the `forRoot()` static method pattern:
+
+```typescript
+@KanjijsModule({})
+export class AuthModule {
+  static forRoot(config: AuthConfig): DynamicModule {
+    return {
+      module: AuthModule,
+      providers: [
+        { provide: AUTH_CONFIG, useValue: config },
+        { provide: AUTH_SERVICE, useClass: AuthService },
+      ],
+      exports: [AUTH_SERVICE],
+      global: true,  // Auth should be available everywhere
+    };
+  }
+}
+```
+
+**Usage:**
+
+```typescript
+@KanjijsModule({
+  imports: [
+    AuthModule.forRoot({
+      jwtSecret: env('JWT_SECRET', z.string().min(32)),
+      providers: {
+        github: {
+          clientId: env('GITHUB_CLIENT_ID', z.string()),
+          clientSecret: env('GITHUB_CLIENT_SECRET', z.string()),
+        },
+      },
+    }),
+    StoreModule.forRoot({
+      type: 'postgres',
+      connectionString: env('DATABASE_URL', z.string().url()),
+      schema: { users, posts },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+**Why `forRoot()`?** Because the configuration is needed **at import time** — the DI container needs to know the JWT secret before it can create the auth service. A static class property wouldn't work because the config comes from environment variables, which are read at runtime.
+
+## Module Registration
+
+The root module (`app.module.ts`) is the top of the module tree. It imports all feature modules and infrastructure modules:
+
+```typescript
+@KanjijsModule({
+  imports: [
+    // Infrastructure (dynamic modules with config)
+    StoreModule.forRoot({ ... }),
+    AuthModule.forRoot({ ... }),
+
+    // Feature modules (static)
+    UsersModule,
+    PostsModule,
+    NotificationsModule,
+  ],
+})
+export class AppModule {}
+```
+
+**Order matters:** Infrastructure modules (Store, Auth) should be imported before feature modules that depend on them.
+
+## Circular Dependencies
+
+If Module A imports Module B and Module B imports Module A, Kanji detects this at startup and throws a clear error.
+
+**How to fix it:** Extract the shared provider into a third module:
+
+```typescript
+// ❌ Circular: A → B → A
+@KanjijsModule({ imports: [ModuleB] })
+class ModuleA {}
+
+@KanjijsModule({ imports: [ModuleA] })
+class ModuleB {}
+
+// ✅ Fixed: Extract shared provider into ModuleC
+@KanjijsModule({ exports: [SharedService] })
+class ModuleC {}
+
+@KanjijsModule({ imports: [ModuleC] })
+class ModuleA {}
+
+@KanjijsModule({ imports: [ModuleC] })
+class ModuleB {}
+```
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| Forgetting `exports` | "Provider not found" at startup | Add the provider to the module's `exports` array |
+| Importing wrong module | "Provider not found" | Check the `imports` — you may be importing the wrong module |
+| Too many global modules | Tight coupling, hard to test | Only `DatabaseModule`, `AuthModule`, and `ConfigModule` should be global |
+| Circular dependencies | Bootstrap crash | Extract shared providers into a third module |
+| Missing `forRoot()` config | Undefined config in services | Ensure the dynamic module receives config via `forRoot()` |

@@ -1,0 +1,271 @@
+---
+title: Project Structure
+description: How a Kanji project is organized and why each file matters
+---
+
+## Overview
+
+Kanji follows a **feature-based modular architecture**. Each feature (users, posts, auth, etc.) lives in its own folder with a strict file convention. This isn't arbitrary — it enforces separation of concerns and makes the codebase navigable.
+
+```
+my-app/
+├── src/
+│   ├── database/
+│   │   ├── schema.ts          # Drizzle table definitions (Postgres) or types (MongoDB)
+│   │   └── migrations/        # Auto-generated migration files
+│   ├── modules/
+│   │   ├── users/
+│   │   │   ├── users.contracts.ts  # Zod schemas — the API contract
+│   │   │   ├── users.controller.ts # HTTP handlers — thin, no logic
+│   │   │   ├── users.service.ts    # Business logic — the brain
+│   │   │   ├── users.repository.ts # Data access — queries and mutations
+│   │   │   ├── users.module.ts     # Module wiring — DI declarations
+│   │   │   └── index.ts            # Barrel export
+│   │   ├── posts/
+│   │   │   └── ...
+│   │   └── auth/
+│   │       └── auth.module.ts      # Auth configuration
+│   ├── app.module.ts          # Root module — imports everything
+│   └── main.ts                # Entry point — creates the server
+├── tests/
+│   ├── unit/                  # Service-level tests
+│   └── integration/           # HTTP endpoint tests
+├── .env                       # Environment variables (not committed)
+├── kanji.config.ts            # CLI configuration
+├── bunfig.toml
+├── package.json
+└── tsconfig.json
+```
+
+## File Roles
+
+### `main.ts` — The Entry Point
+
+This is where the application boots. It validates environment variables, builds the DI container from your module tree, and starts the HTTP server.
+
+```typescript
+import { KanjijsAdapter } from '@kanjijs/platform-hono';
+import { ZodValidator } from '@kanjijs/contracts';
+import { assertEnvValid } from '@kanjijs/common';
+import { AppModule } from './app.module';
+
+assertEnvValid();
+
+const { app } = await KanjijsAdapter.create(AppModule, {
+  validator: new ZodValidator(),
+});
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
+```
+
+**Why `assertEnvValid()` first?** Because if a required env var is missing, you want to know immediately at startup — not when the first request hits a dead endpoint.
+
+### `app.module.ts` — The Root Module
+
+This is the top of the module tree. It imports all feature modules and infrastructure modules (database, auth).
+
+```typescript
+import { KanjijsModule } from '@kanjijs/core';
+import { StoreModule } from '@kanjijs/store';
+import { AuthModule } from '@kanjijs/auth';
+import { UsersModule } from './modules/users/users.module';
+import { PostsModule } from './modules/posts/posts.module';
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
+
+@KanjijsModule({
+  imports: [
+    StoreModule.forRoot({
+      type: 'postgres',
+      connectionString: env('DATABASE_URL', z.string().url()),
+      schema: { users, posts },  // Drizzle table objects
+    }),
+    AuthModule.forRoot({
+      jwtSecret: env('JWT_SECRET', z.string().min(32)),
+      providers: {
+        github: {
+          clientId: env('GITHUB_CLIENT_ID', z.string()),
+          clientSecret: env('GITHUB_CLIENT_SECRET', z.string()),
+        },
+      },
+    }),
+    UsersModule,
+    PostsModule,
+  ],
+})
+export class AppModule {}
+```
+
+### `*.contracts.ts` — The API Contract
+
+Defines what each endpoint accepts and returns using Zod schemas. This is the **single source of truth** — it serves three purposes simultaneously:
+
+1. **HTTP request validation** — When a request hits the endpoint, the framework validates body, query, params, and headers against the contract *before* the controller handler runs. If `name` is required and the client doesn't send it, the framework automatically returns a `400` with field-level errors. Your controller never sees invalid data.
+2. **TypeScript types** — The same Zod schemas generate TypeScript types for your controllers and services.
+3. **OpenAPI spec + SDK** — The contract generates the OpenAPI specification and a typed client SDK.
+
+```typescript
+import { z } from 'zod';
+
+export const CreateUserContract = {
+  method: 'POST' as const,
+  path: '/users',
+  request: {
+    body: z.object({
+      name: z.string().min(1),     // Required — 400 if missing or empty
+      email: z.string().email(),   // Required — 400 if missing or not an email
+    }),
+  },
+  responses: {
+    201: z.object({ id: z.string().uuid(), name: z.string(), email: z.string() }),
+    400: z.object({ error: z.string(), issues: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })) }),
+  },
+};
+```
+
+:::tip[What the client sees]
+If a client sends `POST /users` with `{ "name": "Alice" }` (no `email`), the framework responds with `400` before the controller ever runs:
+```json
+{
+  "error": "Validation failed",
+  "issues": [{ "path": "email", "code": "invalid_type", "message": "Required" }]
+}
+```
+:::
+
+### `*.controller.ts` — The HTTP Layer
+
+Controllers are **thin**. They access validated data from context, call the service, and return a response. No business logic, no database queries, no conditional branching beyond basic routing.
+
+```typescript
+@Controller('/users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Post('/')
+  @Contract(CreateUserContract)
+  async create(c: Context) {
+    const body = c.get('kanji.validated.body');
+    const user = await this.usersService.create(body);
+    return c.json(user, 201);
+  }
+}
+```
+
+### `*.service.ts` — The Business Logic
+
+Services are where decisions happen. They're injectable, testable, and have no knowledge of HTTP. They inject the repository for data access — never the database directly. They throw error classes when something goes wrong — Kanji catches these and returns proper HTTP responses.
+
+```typescript
+@Injectable()
+export class UsersService {
+  constructor(private readonly repository: UsersRepository) {}
+
+  async create(data: { name: string; email: string }) {
+    const existing = await this.repository.findByEmail(data.email);
+    if (existing) throw new ConflictError('Email already registered');
+    return this.repository.create(data);
+  }
+}
+```
+
+### `*.repository.ts` — The Data Access Layer
+
+Repositories handle all database operations. They're injectable via `@Repository()` and receive the database client through DI. Services never touch the DB — they delegate to the repository.
+
+```typescript
+@Repository()
+export class UsersRepository {
+  constructor(
+    @Inject(DATABASE_CLIENT)
+    private readonly db: Database,
+  ) {}
+
+  async create(data: { name: string; email: string }) {
+    const id = crypto.randomUUID();
+    await this.db.query.users.insert({ id, ...data });
+    return { id, ...data };
+  }
+
+  async findByEmail(email: string) {
+    return this.db.query.users.findBy({ email });
+  }
+}
+```
+
+### `*.module.ts` — The Wiring
+
+Modules declare what this feature provides and what it needs. They're the DI configuration. Repositories go in `repositories`, services in `providers` — each array has semantic meaning.
+
+```typescript
+@KanjijsModule({
+  controllers: [UsersController],
+  repositories: [UsersRepository],
+  providers: [UsersService],
+  exports: [UsersService],  // Export if other modules need this service
+})
+export class UsersModule {}
+```
+
+### `database/schema.ts` — The Data Layer
+
+For PostgreSQL, this contains Drizzle table definitions. For MongoDB, you define TypeScript interfaces instead.
+
+```typescript
+// PostgreSQL
+import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core';
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 256 }).notNull(),
+  email: varchar('email', { length: 256 }).notNull().unique(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Infer types from schema — no manual interfaces needed
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+```
+
+## Why This Structure?
+
+| Principle | How the structure enforces it |
+|---|---|
+| **Separation of concerns** | Each file has one job. Controllers don't do business logic. Services don't know about HTTP. Repositories don't know about business rules. |
+| **Contract-first** | Contracts are defined first and used by controllers, OpenAPI, and SDK. |
+| **DI boundaries** | Modules control what's visible. Services can't access other modules' internals without explicit `exports`. |
+| **Testability** | Each layer can be tested in isolation. Services with unit tests, controllers with integration tests, repositories with DB tests. |
+| **Navigability** | `users.controller.ts` always means the HTTP layer for users. `users.repository.ts` always means data access. No hunting through mixed files. |
+
+## Scaling
+
+For projects with many features, organize by domain:
+
+```
+src/modules/
+├── users/
+│   ├── users.module.ts
+│   ├── users.controller.ts
+│   ├── users.service.ts
+│   ├── users.repository.ts
+│   └── users.contracts.ts
+├── posts/
+│   ├── posts.module.ts
+│   ├── posts.controller.ts
+│   ├── posts.service.ts
+│   ├── posts.repository.ts
+│   └── posts.contracts.ts
+└── auth/
+    └── auth.module.ts
+```
+
+When you hit 50+ endpoints, consider splitting into sub-modules within each feature.
+
+## What's Next?
+
+- [Core Concepts](/core-concepts/architecture) — Learn the architecture layers
+- [Module System](/core-concepts/modules) — Understand how modules wire together
+- [Contracts](/core-concepts/contracts) — Deep dive into contract-first development

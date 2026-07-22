@@ -1,0 +1,227 @@
+---
+title: Security
+description: Security headers, rate limiting, RBAC, ACL, and production hardening
+---
+
+## Security Headers
+
+Kanji includes security headers middleware by default. Every response includes:
+
+| Header | Value | Purpose |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME type sniffing |
+| `X-Frame-Options` | `DENY` | Prevents clickjacking |
+| `X-XSS-Protection` | `1; mode=block` | Enables browser XSS filtering |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Forces HTTPS |
+
+These are applied globally — no configuration needed.
+
+## Rate Limiting
+
+Protect endpoints from abuse with the `@RateLimit` decorator:
+
+```typescript
+import { Controller } from '@kanjijs/platform-hono';
+import { RateLimit } from '@kanjijs/platform-hono';
+
+// Controller-level: all routes in this controller
+@Controller('api')
+@RateLimit({ windowMs: 60000, max: 100 })  // 100 requests per minute
+export class ApiController { /* ... */ }
+```
+
+```typescript
+// Route-level: specific endpoint only
+@Post('/login')
+@RateLimit({ windowMs: 900000, max: 5 })  // 5 attempts per 15 minutes
+async login(c: Context) { /* ... */ }
+```
+
+### Rate Limit Configuration
+
+| Parameter | Description | Example |
+|---|---|---|
+| `windowMs` | Time window in milliseconds | `60000` = 1 minute |
+| `max` | Maximum requests per window | `100` |
+
+### Common Rate Limit Patterns
+
+```typescript
+// API endpoints: 100 req/min
+@RateLimit({ windowMs: 60000, max: 100 })
+
+// Login attempts: 5 per 15 minutes
+@RateLimit({ windowMs: 900000, max: 5 })
+
+// Password reset: 3 per hour
+@RateLimit({ windowMs: 3600000, max: 3 })
+
+// Public reads: 200 per minute
+@RateLimit({ windowMs: 60000, max: 200 })
+```
+
+## RBAC (Role-Based Access Control)
+
+RBAC restricts access based on user roles. Kanji implements this via CLP (Class-Level Permissions):
+
+```typescript
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard, clp } from '@kanjijs/auth';
+
+// Only admins can access this controller
+@Controller('/admin')
+@UseGuards(AuthGuard, clp({ roles: ['admin'] }))
+export class AdminController { /* ... */ }
+
+// Moderators or admins can access
+@Controller('/moderation')
+@UseGuards(AuthGuard, clp({ roles: ['admin', 'moderator'] }))
+export class ModerationController { /* ... */ }
+```
+
+### How CLP Works
+
+1. `AuthGuard` resolves the user from JWT
+2. `clp()` checks `c.get('kanji.auth.roles')` against the required roles
+3. If no match → 403 Forbidden (handler never runs)
+
+### Setting Roles
+
+Roles are set when the user authenticates. They come from the JWT payload:
+
+```typescript
+// In your auth service
+const token = jwt.sign({
+  sub: user.id,
+  email: user.email,
+  roles: ['admin'],  // ← These are checked by clp()
+}, secret);
+```
+
+## ACL (Access Control Lists)
+
+ACL provides **object-level** permissions — checking if a user can access a **specific** resource, not just the endpoint:
+
+```typescript
+import { Injectable } from '@kanjijs/core';
+import type { ResourcePolicy, AuthContext, KanjiSession } from '@kanjijs/auth';
+
+@Injectable()
+export class PostPolicy implements ResourcePolicy {
+  canRead(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Published posts are public, drafts only for owner
+    return resource.published || resource.userId === user.id;
+  }
+
+  canUpdate(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Owner or admin can update
+    return resource.userId === user.id || user.roles.includes('admin');
+  }
+
+  canDelete(c: AuthContext, resource: Post, user: KanjiSession): boolean {
+    // Only admin can delete
+    return user.roles.includes('admin');
+  }
+}
+```
+
+### Using ACL in Controllers
+
+```typescript
+import { UseGuards } from '@kanjijs/platform-hono';
+import { AuthGuard, acl } from '@kanjijs/auth';
+
+@Controller('/posts')
+export class PostsController {
+  @Put('/:id')
+  @UseGuards(AuthGuard, acl({ policy: PostPolicy }))
+  @Contract(UpdatePostContract)
+  async update(c: Context) {
+    // PostPolicy.canUpdate() is checked BEFORE this runs
+    // If it returns false → 403 Forbidden
+    const { id } = c.get('kanji.validated.params');
+    const body = c.get('kanji.validated.body');
+    return c.json(await this.postsService.update(id, body));
+  }
+}
+```
+
+### CLP vs ACL
+
+| | CLP (Class-Level) | ACL (Object-Level) |
+|---|---|---|
+| **Checks** | "Can this role access this endpoint?" | "Can this user access THIS object?" |
+| **Scope** | Entire controller or route | Individual resource instance |
+| **Use case** | Admin panels, role-restricted endpoints | Owner-only editing, shared resources |
+| **Example** | `clp({ roles: ['admin'] })` | `acl({ policy: PostPolicy })` |
+
+## Security Best Practices
+
+### 1. Never Store Secrets in Code
+
+```typescript
+// ❌ Hardcoded secrets
+const jwtSecret = 'my-super-secret-key';
+
+// ✅ Environment variables with validation
+const jwtSecret = env('JWT_SECRET', z.string().min(32));
+```
+
+### 2. Validate All Inputs
+
+Use contracts (Zod schemas) on every endpoint. Kanji validates automatically:
+
+```typescript
+@Post('/')
+@Contract(CreateUserContract)  // Validates body, returns 400 if invalid
+async create(c: Context) {
+  // c.get('kanji.validated.body') is guaranteed valid
+}
+```
+
+### 3. Use HTTPS in Production
+
+Always. No exceptions. The HSTS header enforces this for browsers.
+
+### 4. Rotate JWT Secrets
+
+Use `previousSecrets` for zero-downtime rotation:
+
+```typescript
+AuthModule.forRoot({
+  jwtSecret: env('NEW_SECRET', z.string().min(32)),
+  previousSecrets: [env('OLD_SECRET', z.string())],
+})
+```
+
+### 5. Apply Least Privilege
+
+```typescript
+// ❌ Too broad
+clp({ roles: ['admin', 'user', 'guest'] })
+
+// ✅ Specific
+clp({ roles: ['admin'] })
+```
+
+### 6. Rate Limit Sensitive Endpoints
+
+```typescript
+@Post('/login')
+@RateLimit({ windowMs: 900000, max: 5 })  // 5 attempts per 15 min
+async login(c: Context) { /* ... */ }
+
+@Post('/password-reset')
+@RateLimit({ windowMs: 3600000, max: 3 })  // 3 per hour
+async resetPassword(c: Context) { /* ... */ }
+```
+
+### 7. Use Error Classes, Not Raw Strings
+
+```typescript
+// ❌ Leaks implementation details
+throw new Error('Database connection failed');
+
+// ✅ Safe error messages
+throw new NotFoundError('User not found');
+```

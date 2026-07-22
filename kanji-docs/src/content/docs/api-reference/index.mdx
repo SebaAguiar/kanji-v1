@@ -1,0 +1,296 @@
+---
+title: API Reference
+description: Core decorators, functions, context keys, and error classes
+---
+
+## @kanjijs/core
+
+### @Module / @KanjijsModule
+
+Defines a module — the DI configuration boundary.
+
+```typescript
+@KanjijsModule({
+  imports?: Module[];           // Other modules this module depends on
+  providers?: Provider[];      // Services available for injection
+  controllers?: Controller[];  // HTTP endpoint handlers
+  exports?: Provider[];        // Providers shared with importing modules
+  global?: boolean;            // Make providers available everywhere
+})
+```
+
+### @Injectable
+
+Marks a class for DI management.
+
+```typescript
+@Injectable()
+class UsersService {}
+```
+
+### @Inject
+
+Injects a value by token (required for Symbol tokens).
+
+```typescript
+constructor(@Inject(DATABASE_CLIENT) private db: Database)
+```
+
+---
+
+## @kanjijs/platform-hono
+
+### @Controller
+
+Defines an HTTP controller with a route prefix.
+
+```typescript
+@Controller('prefix')
+class MyController {}
+```
+
+### Route Decorators
+
+```typescript
+@Get('/path')
+@Post('/path')
+@Put('/path')
+@Patch('/path')
+@Delete('/path')
+```
+
+### @Contract
+
+Validates the request against a Zod schema.
+
+```typescript
+@Contract(CreateUserContract)  // Per-method
+@Contract('methodName')        // With @ContractOf
+```
+
+### @UseGuards
+
+Applies auth/permission guards.
+
+```typescript
+@UseGuards(AuthGuard)                    // Single guard
+@UseGuards(AuthGuard, RolesGuard)        // Multiple guards (run in order)
+@UseGuards(clp({ roles: ['admin'] }))    // Inline CLP
+@UseGuards(acl({ policy: PostPolicy }))  // Inline ACL
+```
+
+### @RateLimit
+
+Rate limits an endpoint.
+
+```typescript
+@RateLimit({ windowMs: 60000, max: 100 })
+```
+
+### @WebSocketGateway
+
+Defines a WebSocket gateway.
+
+```typescript
+@WebSocketGateway('namespace')
+```
+
+### @WebSocketMessage
+
+Handles a specific message event.
+
+```typescript
+@WebSocketMessage('eventName')
+@WebSocketMessage('eventName', { schema: ZodSchema })
+```
+
+---
+
+## @kanjijs/contracts
+
+### @ContractOf
+
+Maps contract names to methods at the controller level.
+
+```typescript
+@ContractOf({
+  create: CreateUserContract,
+  findById: GetUserContract,
+})
+```
+
+### @Contract (method-level)
+
+Binds a contract to a specific handler.
+
+```typescript
+@Contract('create')
+```
+
+---
+
+## @kanjijs/auth
+
+### AuthModule.forRoot()
+
+```typescript
+AuthModule.forRoot({
+  jwtSecret: string;              // Required: JWT signing secret (min 32 chars)
+  previousSecrets?: string[];     // Optional: for zero-downtime rotation
+  providers?: {                   // Optional: OAuth providers
+    github?: { clientId: string; clientSecret: string };
+    google?: { clientId: string; clientSecret: string };
+    microsoft?: { clientId: string; clientSecret: string };
+  };
+})
+```
+
+### Guards
+
+```typescript
+AuthGuard                           // Validates JWT token
+clp({ roles: string[] })           // Class-Level Permissions (RBAC)
+acl({ policy: ResourcePolicy })    // Object-Level Permissions (ACL)
+```
+
+### ResourcePolicy Interface
+
+```typescript
+interface ResourcePolicy {
+  canRead?(c: AuthContext, resource: unknown, user: KanjiSession): boolean;
+  canUpdate?(c: AuthContext, resource: unknown, user: KanjiSession): boolean;
+  canDelete?(c: AuthContext, resource: unknown, user: KanjiSession): boolean;
+}
+```
+
+---
+
+## @kanjijs/store
+
+### StoreModule.forRoot()
+
+```typescript
+// PostgreSQL
+StoreModule.forRoot({
+  type: 'postgres',
+  connectionString: string,
+  schema: Record<string, PgTable>,  // Required for Postgres
+})
+
+// MongoDB
+StoreModule.forRoot({
+  type: 'mongodb',
+  connectionString: string,
+  dbName: string,
+})
+```
+
+### DATABASE_CLIENT Token
+
+```typescript
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+
+constructor(@Inject(DATABASE_CLIENT) private db: Database)
+```
+
+---
+
+## Context Keys
+
+### Authentication
+
+| Key | Type | Description |
+|---|---|---|
+| `kanji.auth.user` | `{ id: string, email: string, name: string }` | Basic user info |
+| `kanji.auth.session` | `KanjiSession` | Full session object |
+| `kanji.auth.roles` | `string[]` | User's roles |
+| `kanji.auth.scopes` | `string[]` | OAuth scopes |
+| `kanji.auth.principal` | `Principal` | Normalized identity |
+
+### Authorization
+
+| Key | Type | Description |
+|---|---|---|
+| `kanji.authz.cache` | `Map<string, Decision>` | ACL cache per request |
+| `kanji.authz.decision` | `Decision` | Last ACL decision |
+
+### Validated Input
+
+| Key | Type | Description |
+|---|---|---|
+| `kanji.validated.body` | `T` | Typed request body |
+| `kanji.validated.query` | `T` | Typed query parameters |
+| `kanji.validated.params` | `T` | Typed URL parameters |
+| `kanji.validated.headers` | `T` | Typed headers |
+| `kanji.validated.cookies` | `T` | Typed cookies |
+
+### Metadata
+
+| Key | Type | Description |
+|---|---|---|
+| `kanji.requestId` | `string` | Unique request UUID |
+
+:::caution[Common typo]
+The correct key is `kanji.validated.body` (with `d`), NOT `kanji.validation.body`.
+:::
+
+---
+
+## Error Classes
+
+Import from `@kanjijs/common`:
+
+```typescript
+import {
+  KanjiError,           // Base error class
+  BadRequestError,      // 400
+  UnauthorizedError,    // 401
+  ForbiddenError,       // 403
+  NotFoundError,        // 404
+  ConflictError,        // 409
+  ValidationError,      // 422
+  InternalServerError,  // 500
+} from '@kanjijs/common';
+```
+
+### Standard Error Response Shape
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "issues": [
+    {
+      "path": "body.email",
+      "code": "invalid_type",
+      "message": "Expected string, received number"
+    }
+  ]
+}
+```
+
+---
+
+## Environment Variables
+
+### env()
+
+Type-safe environment variable access with Zod validation:
+
+```typescript
+import { env } from '@kanjijs/common';
+import { z } from 'zod';
+
+const dbUrl = env('DATABASE_URL', z.string().url());
+const port = env('PORT', z.coerce.number().default(3000));
+```
+
+### assertEnvValid()
+
+Call in `main.ts` to validate all `env()` calls at startup:
+
+```typescript
+import { assertEnvValid } from '@kanjijs/common';
+
+assertEnvValid();  // Throws if any env var is invalid
+```

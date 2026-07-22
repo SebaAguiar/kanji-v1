@@ -1,0 +1,247 @@
+---
+title: Dependency Injection
+description: Kanji's deterministic DI container — how services are wired and resolved
+---
+
+## How It Works
+
+Kanji uses a **deterministic DI container**. One container is created per application instance — no global state, no singletons. This means:
+
+- Every test gets its own isolated container
+- No hidden dependencies between requests
+- All wiring is explicit and verifiable at startup
+
+## Injectable Services
+
+Any class that should be managed by the DI container needs the `@Injectable()` decorator:
+
+```typescript
+import { Injectable } from '@kanjijs/core';
+
+@Injectable()
+export class UsersService {
+  constructor(
+    private readonly db: Database,
+  ) {}
+}
+```
+
+The constructor parameters are the dependencies. Kanji resolves them automatically from the DI container.
+
+**How resolution works:**
+1. Kanji sees `UsersService` needs `Database` in its constructor
+2. It looks for `Database` in the module's providers (or imported/global modules)
+3. If found, it creates the instance and injects it
+4. If not found, it throws "Provider not found" at startup
+
+## Injection Tokens
+
+For non-class dependencies (config values, primitives, interfaces), use **Symbol tokens**:
+
+```typescript
+import { Inject } from '@kanjijs/core';
+
+const API_KEY = Symbol('API_KEY');
+const MAX_RETRIES = Symbol('MAX_RETRIES');
+
+@Injectable()
+export class ExternalService {
+  constructor(
+    @Inject(API_KEY) private readonly apiKey: string,
+    @Inject(MAX_RETRIES) private readonly retries: number,
+  ) {}
+}
+```
+
+Register the values in the module:
+
+```typescript
+@KanjijsModule({
+  providers: [
+    ExternalService,
+    { provide: API_KEY, useValue: 'sk-12345' },
+    { provide: MAX_RETRIES, useValue: 3 },
+  ],
+})
+export class ExternalModule {}
+```
+
+### Why Symbol, not String?
+
+```typescript
+// ❌ Bad — strings can collide
+const API_KEY = 'API_KEY';
+
+// ✅ Good — Symbols are unique
+const API_KEY = Symbol('API_KEY');
+```
+
+If two modules both define `'API_KEY'` as a string token, they'd collide. Symbols are guaranteed unique.
+
+## Provider Types
+
+Kanji supports four types of providers:
+
+### 1. Class Providers (most common)
+
+The class IS the provider. Kanji creates a new instance.
+
+```typescript
+@KanjijsModule({
+  providers: [UsersService],  // Kanji creates UsersService via new UsersService(...)
+})
+export class UsersModule {}
+```
+
+### 2. Value Providers (config, constants)
+
+Inject a pre-defined value.
+
+```typescript
+providers: [
+  { provide: APP_CONFIG, useValue: { port: 3000, env: 'production' } },
+]
+```
+
+### 3. Class-Reference Providers (when class differs from token)
+
+Use a different class to satisfy a token.
+
+```typescript
+providers: [
+  { provide: Logger, useClass: ConsoleLogger },
+]
+```
+
+### 4. Factory Providers (async initialization, e.g., DB connections)
+
+Create a value asynchronously. Perfect for database connections, cache clients, etc.
+
+```typescript
+providers: [
+  {
+    provide: DATABASE_CLIENT,
+    useFactory: async () => {
+      const client = postgres(process.env.DATABASE_URL!);
+      return drizzle(client);
+    },
+  },
+]
+```
+
+## Constructor Injection
+
+The standard pattern. Dependencies go in the constructor:
+
+```typescript
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(DATABASE_CLIENT) private db: Database,
+    @Inject(MAIL_SERVICE) private mail: MailService,
+  ) {}
+}
+```
+
+**Rules:**
+- Use `@Inject(TOKEN)` for Symbol tokens
+- Class tokens don't need `@Inject` — Kanji resolves them by type
+- Keep constructor parameters to a minimum (3-4 max). If you need more, your service is doing too much.
+
+## Provider Scope
+
+Providers are **scoped to their module** by default. To make a provider available to other modules, you must explicitly `exports` it:
+
+```typescript
+@KanjijsModule({
+  providers: [DatabaseService],
+  exports: [DatabaseService],  // Now importers can inject DatabaseService
+})
+export class DatabaseModule {}
+```
+
+Without `exports`, any module trying to inject `DatabaseService` will fail with "Provider not found."
+
+## Dependency Resolution Order
+
+When Kanji builds the container:
+
+1. **Collect all modules** from `app.module.ts` imports (recursively)
+2. **Register providers** from each module (local + exported imports + globals)
+3. **Resolve dependencies** — for each provider, resolve its constructor parameters
+4. **Detect cycles** — if resolution loops, throw circular dependency error
+5. **Create instances** — instantiate all providers in dependency order
+
+This all happens at **startup**, not per-request. If any dependency is missing, the app won't start.
+
+## Circular Dependency Detection
+
+Kanji detects circular dependencies at startup. If Module A depends on Module B which depends on Module A, you'll see:
+
+```
+Error: Circular dependency detected between ModuleA and ModuleB
+```
+
+**How to fix:**
+
+```typescript
+// Option 1: Extract shared provider into a third module
+@KanjijsModule({ exports: [SharedService] })
+class SharedModule {}
+
+// Option 2: Use a forwardRef (last resort)
+@Injectable()
+class ServiceA {
+  constructor(@Inject(forwardRef(() => ServiceB)) private b: ServiceB) {}
+}
+```
+
+## Common Patterns
+
+### Injecting the Database
+
+```typescript
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+
+@Injectable()
+export class UsersService {
+  constructor(@Inject(DATABASE_CLIENT) private db: Database) {}
+}
+```
+
+### Injecting Configuration
+
+```typescript
+const MAIL_CONFIG = Symbol('MAIL_CONFIG');
+
+@Injectable()
+export class MailService {
+  constructor(@Inject(MAIL_CONFIG) private config: MailConfig) {}
+}
+
+// In module:
+providers: [
+  { provide: MAIL_CONFIG, useValue: { host: 'smtp.example.com', port: 587 } },
+  MailService,
+]
+```
+
+### Injecting Another Service
+
+```typescript
+@Injectable()
+export class PostsService {
+  constructor(private readonly usersService: UsersService) {}
+  // No @Inject needed — Kanji resolves by class type
+}
+```
+
+## Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| Missing `@Injectable()` | "Cannot resolve dependency" | Add `@Injectable()` decorator |
+| Missing `@Inject(TOKEN)` | Injecting `undefined` | Add `@Inject()` for Symbol tokens |
+| Not exporting provider | "Provider not found" in importing module | Add to `exports` array |
+| Auto-registration | Provider not found (not supported) | Declare in module's `providers` |
+| Too many constructor params | Hard to test, tight coupling | Split into smaller services |

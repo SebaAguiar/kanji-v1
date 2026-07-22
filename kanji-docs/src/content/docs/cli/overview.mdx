@@ -1,0 +1,92 @@
+---
+title: CLI Overview
+description: Kanji command-line interface for scaffolding, development, and database management
+---
+
+## Installation
+
+The CLI is included when you install `@kanjijs/cli`:
+
+```bash
+bun add -g @kanjijs/cli
+```
+
+Or use it via `bunx` (no global install needed):
+
+```bash
+bunx kanji <command>
+```
+
+## Commands at a Glance
+
+| Command | Description |
+|---|---|
+| `kanji new <name>` | Create a new project from template |
+| `kanji dev` | Start dev server with hot reload |
+| `kanji g resource <name>` | Generate CRUD module (controller + service + contracts + module) |
+| `kanji g gateway <name>` | Generate WebSocket gateway |
+| `kanji g service <name>` | Generate service only |
+| `kanji g controller <name>` | Generate controller only |
+| `kanji migrate` | Run pending database migrations |
+| `kanji migrate:status` | Check migration status |
+| `kanji migrate:rollback` | Rollback last migration |
+| `kanji migrate:generate` | Generate new migration from schema changes |
+| `kanji db:push` | Push schema directly (dev only) |
+| `kanji db:studio` | Open Drizzle Studio (visual DB browser) |
+| `kanji seed:run` | Run seed files |
+| `kanji openapi:generate` | Generate OpenAPI spec from contracts |
+| `kanji sdk:generate` | Generate TypeScript SDK from spec |
+| `kanji openapi:serve` | Serve Swagger/ReDoc UI |
+| `kanji auth-setup` | Interactive auth configuration wizard |
+
+## Interactive Mode
+
+Run without arguments for an interactive wizard:
+
+```bash
+kanji g
+```
+
+The wizard will:
+1. Detect your database adapter from `kanji.config.ts`
+2. Prompt for resource name
+3. Ask which CRUD actions to generate
+4. Optionally configure authorization (RBAC + ACL)
+5. Generate all files and register the module in `app.module.ts`
+
+## Configuration
+
+The CLI reads from `kanji.config.ts`:
+
+```typescript
+export default {
+  database: {
+    adapter: 'postgres',           // or 'mongodb'
+    url: process.env.DATABASE_URL,
+  },
+  generate: {
+    tests: true,                   // Generate test files with resources
+    repository: true,              // Generate repository layer
+  },
+  openapi: {
+    output: './openapi.json',      // Default OpenAPI output path
+    title: 'My API',
+    version: '1.0.0',
+  },
+};
+```
+
+## What `kanji g resource` Generates
+
+For a resource named `users`:
+
+| File | Purpose |
+|---|---|
+| `users.contracts.ts` | Zod schemas for create, read, update, delete operations |
+| `users.controller.ts` | HTTP handlers with `@Contract()` decorators |
+| `users.service.ts` | Business logic with `@Injectable()` and database injection |
+| `users.module.ts` | Module declaration with providers and controllers |
+| `users.service.test.ts` | Unit tests for the service |
+| `users.api.test.ts` | Integration tests for HTTP endpoints |
+
+The CLI also **auto-registers** the new module in `app.module.ts`.

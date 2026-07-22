@@ -1,0 +1,93 @@
+---
+title: Visión General del CLI
+description: Interfaz de línea de comandos de Kanji para scaffolding, desarrollo y gestión de base de datos
+---
+
+## Instalación
+
+El CLI se incluye cuando instalás `@kanjijs/cli`:
+
+```bash
+bun add -g @kanjijs/cli
+```
+
+O usalo sin instalar globalmente con `bunx`:
+
+```bash
+bunx kanji <command>
+```
+
+## Resumen de Comandos
+
+| Comando | Descripción |
+|---|---|
+| `kanji new <nombre>` | Crear un nuevo proyecto desde un template |
+| `kanji dev` | Iniciar servidor de desarrollo con hot reload |
+| `kanji g resource <nombre>` | Generar módulo CRUD (controller + service + contracts + module) |
+| `kanji g gateway <nombre>` | Generar gateway WebSocket |
+| `kanji g service <nombre>` | Generar solo el service |
+| `kanji g controller <nombre>` | Generar solo el controller |
+| `kanji migrate` | Ejecutar migraciones pendientes de la base de datos |
+| `kanji migrate:status` | Verificar estado de las migraciones |
+| `kanji migrate:rollback` | Revertir la última migración |
+| `kanji migrate:generate` | Generar una nueva migración a partir de cambios en el schema |
+| `kanji db:push` | Aplicar schema directamente (solo para desarrollo) |
+| `kanji db:studio` | Abrir Drizzle Studio (explorador visual de la base de datos) |
+| `kanji seed:run` | Ejecutar archivos de seed |
+| `kanji openapi:generate` | Generar spec OpenAPI a partir de contratos |
+| `kanji sdk:generate` | Generar SDK TypeScript a partir de la spec |
+| `kanji openapi:serve` | Servir UI de Swagger/ReDoc |
+| `kanji auth-setup` | Asistente interactivo de configuración de auth |
+
+## Modo Interactivo
+
+Ejecutá el comando sin argumentos para lanzar el asistente interactivo:
+
+```bash
+kanji g
+```
+
+El asistente va a:
+
+1. Detectar tu adaptador de base de datos desde `kanji.config.ts`
+2. Pedirte el nombre del recurso
+3. Preguntarte qué acciones CRUD querés generar
+4. Opcionalmente configurar autorización (RBAC + ACL)
+5. Generar todos los archivos y registrar el módulo en `app.module.ts`
+
+## Configuración
+
+El CLI lee la configuración desde `kanji.config.ts`:
+
+```typescript
+export default {
+  database: {
+    adapter: 'postgres',           // o 'mongodb'
+    url: process.env.DATABASE_URL,
+  },
+  generate: {
+    tests: true,                   // Generar archivos de test con los recursos
+    repository: true,              // Generar capa de repository
+  },
+  openapi: {
+    output: './openapi.json',      // Ruta de salida por defecto para OpenAPI
+    title: 'My API',
+    version: '1.0.0',
+  },
+};
+```
+
+## Qué Genera `kanji g resource`
+
+Para un recurso llamado `users`:
+
+| Archivo | Propósito |
+|---|---|
+| `users.contracts.ts` | Esquemas Zod para las operaciones de crear, leer, actualizar y eliminar |
+| `users.controller.ts` | Handlers HTTP con decoradores `@Contract()` |
+| `users.service.ts` | Lógica de negocio con `@Injectable()` e inyección de base de datos |
+| `users.module.ts` | Declaración del módulo con providers y controllers |
+| `users.service.test.ts` | Tests unitarios del service |
+| `users.api.test.ts` | Tests de integración de los endpoints HTTP |
+
+El CLI además **auto-registra** el nuevo módulo en `app.module.ts`.

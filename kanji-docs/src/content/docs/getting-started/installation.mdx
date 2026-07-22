@@ -1,0 +1,149 @@
+---
+title: Installation
+description: Install Kanji Framework and set up your development environment
+---
+
+## Prerequisites
+
+- [Bun](https://bun.sh) v1.0 or later — Kanji is built for Bun. Node.js is not officially supported.
+- [pnpm](https://pnpm.io) (recommended) or npm
+- A database: PostgreSQL or MongoDB (optional for initial setup)
+
+## Create a New Project
+
+The fastest way to start:
+
+```bash
+bunx create-kanji@latest my-app
+```
+
+This scaffolds a complete project with all packages pre-configured. Or install the CLI globally for repeated use:
+
+```bash
+bun add -g @kanjijs/cli
+kanji new my-app
+```
+
+The `kanji new` command supports templates and database options:
+
+```bash
+kanji new my-app --template starter --db postgres
+kanji new my-app --template saas --db mongodb
+```
+
+## Install Dependencies
+
+```bash
+cd my-app
+bun install
+```
+
+## Environment Variables
+
+Kanji uses a typed environment variable system. Create a `.env` file in your project root:
+
+```bash
+# Database (required)
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+# — or for MongoDB —
+# MONGODB_URI=mongodb://localhost:27017
+# MONGODB_DB=mydb
+
+# Auth (required for authentication)
+JWT_SECRET=your-secret-key-min-32-chars-long
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+```
+
+:::caution[Security]
+Never commit `.env` to version control. Kanji validates all environment variables at startup using Zod schemas — if a required variable is missing or invalid, the app won't start.
+:::
+
+Kanji validates environment variables using the `env()` function from `@kanjijs/common`:
+
+```typescript
+import { env, assertEnvValid } from '@kanjijs/common';
+import { z } from 'zod';
+
+// Declare at usage site — colocated, not centralized
+const dbUrl = env('DATABASE_URL', z.string().url());
+const jwtSecret = env('JWT_SECRET', z.string().min(32));
+
+// In main.ts — validate all at once before starting
+assertEnvValid();
+```
+
+This gives you **type-safe** environment variables with runtime validation. If `DATABASE_URL` is not a valid URL, the app throws a clear error at startup — not at the first database query.
+
+## Start Development
+
+```bash
+kanji dev
+```
+
+Your API is now running at `http://localhost:3000`. The dev server includes hot reload — changes to your source files are reflected immediately.
+
+Other useful commands:
+
+```bash
+kanji dev --port 8080          # Custom port
+kanji dev --host 0.0.0.0       # Bind to all interfaces
+```
+
+## Bootstrap Code
+
+The entry point (`main.ts`) is where everything comes together:
+
+```typescript
+import { KanjijsAdapter } from '@kanjijs/platform-hono';
+import { ZodValidator } from '@kanjijs/contracts';
+import { assertEnvValid } from '@kanjijs/common';
+import { AppModule } from './app.module';
+
+// Validate all env() calls succeeded before starting
+assertEnvValid();
+
+// Create the Hono app from your module tree
+const { app } = await KanjijsAdapter.create(AppModule, {
+  validator: new ZodValidator(),
+});
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
+```
+
+**What happens here:**
+1. `assertEnvValid()` — Ensures all `env()` calls resolved successfully. Catches missing/invalid config before the server starts.
+2. `KanjijsAdapter.create()` — Builds the DI container from `AppModule`, registers all controllers, middleware, and routes on Hono.
+3. `ZodValidator()` — The validator that powers `@Contract()` decorators. Without this, contract validation won't work.
+4. `export default` — Bun's way to start an HTTP server. The `fetch` handler is Hono's.
+
+## Project Structure
+
+```
+my-app/
+├── src/
+│   ├── database/
+│   │   ├── schema.ts          # Drizzle table definitions
+│   │   └── migrations/        # Generated migrations
+│   ├── users/
+│   │   ├── users.contracts.ts # API validation schemas (Zod)
+│   │   ├── users.controller.ts# HTTP route handlers (thin)
+│   │   ├── users.service.ts   # Business logic (injectable)
+│   │   └── users.module.ts    # Module declaration
+│   ├── app.module.ts          # Root module (imports all feature modules)
+│   └── main.ts                # Application entrypoint
+├── bunfig.toml
+├── package.json
+└── tsconfig.json
+```
+
+Each feature gets its own folder under `src/modules/`. The four files (contracts, controller, service, module) are the minimum for any feature.
+
+## What's Next?
+
+- [Quick Start](/getting-started/quickstart) — Build your first CRUD endpoint
+- [Project Structure](/getting-started/project-structure) — Understand the file organization in depth
+- [Core Concepts](/core-concepts/architecture) — Learn how Kanji works under the hood

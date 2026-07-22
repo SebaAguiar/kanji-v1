@@ -1,0 +1,209 @@
+---
+title: Inicio Rápido
+description: Construye tu primer endpoint CRUD completo en 5 minutos
+---
+
+Esta guía te lleva a crear un endpoint REST completo con validación, base de datos y arquitectura correcta.
+
+## 1. Generar un Recurso
+
+```bash
+kanji g resource users
+```
+
+Esto genera un módulo CRUD completo con los cuatro archivos requeridos:
+
+- `users.contracts.ts` — Esquemas Zod para validación request/response
+- `users.controller.ts` — Handlers de rutas HTTP
+- `users.service.ts` — Lógica de negocio
+- `users.module.ts` — Declaración del módulo
+
+El CLI también auto-registra el módulo en `app.module.ts`.
+
+## 2. Definir el Contrato
+
+Los contratos son la **fuente de verdad** de tu API. Definen qué acepta y devuelve el endpoint, y Kanji los usa para validación en runtime, tipos TypeScript, spec OpenAPI y generación de SDK — todo desde una sola definición.
+
+```typescript
+// src/users/users.contracts.ts
+import { z } from 'zod';
+
+// Todo contrato define: método HTTP, path, forma del request, formas del response
+export const CreateUserContract = {
+  method: 'POST' as const,
+  path: '/users',
+  request: {
+    body: z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    }),
+  },
+  responses: {
+    201: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string(),
+    }),
+    400: z.object({
+      error: z.string(),
+      issues: z.array(z.object({
+        path: z.string(),
+        code: z.string(),
+        message: z.string(),
+      })),
+    }),
+    409: z.object({
+      error: z.string(),
+      message: z.string(),
+    }),
+  },
+};
+
+export const GetUserContract = {
+  method: 'GET' as const,
+  path: '/users/:id',
+  request: {
+    params: z.object({
+      id: z.string().uuid(),
+    }),
+  },
+  responses: {
+    200: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string(),
+    }),
+    404: z.object({
+      error: z.string(),
+      message: z.string(),
+    }),
+  },
+};
+```
+
+**¿Por qué `method` y `path` en el contrato?** Porque Kanji los usa para generar specs OpenAPI y registrar rutas automáticamente. El contrato ES la definición de la ruta.
+
+## 3. Implementar el Servicio
+
+Los servicios contienen tu lógica de negocio. Son inyectables via DI y nunca deben saber de HTTP — eso es trabajo del controller.
+
+```typescript
+// src/users/users.service.ts
+import { Injectable, Inject } from '@kanjijs/core';
+import { DATABASE_CLIENT, Database } from '@kanjijs/store';
+import { ConflictError, NotFoundError } from '@kanjijs/common';
+
+@Injectable()
+export class UsersService {
+  constructor(@Inject(DATABASE_CLIENT) private db: Database) {}
+
+  async create(data: { name: string; email: string }) {
+    // Verificar duplicados
+    const existing = await this.db.query.users.findBy({ email: data.email });
+    if (existing) {
+      throw new ConflictError('El email ya está registrado');
+    }
+
+    // Insertar y devolver
+    const [user] = await this.db.query.users.insert(data);
+    return user;
+  }
+
+  async findById(id: string) {
+    const user = await this.db.query.users.findById(id);
+    if (!user) {
+      throw new NotFoundError('Usuario no encontrado');
+    }
+    return user;
+  }
+}
+```
+
+**Patrones clave:**
+- `@Injectable()` — Marca esta clase para DI. Kanji crea una instancia por módulo.
+- `@Inject(DATABASE_CLIENT)` — Inyecta la conexión a la base de datos. `DATABASE_CLIENT` es un token Symbol.
+- Lanzá clases de error de `@kanjijs/common` — Kanji las captura y devuelve respuestas HTTP correctas.
+
+## 4. Conectar el Controller
+
+Los controllers son delgados — parsean input, llaman al servicio, y devuelven la respuesta. Sin lógica de negocio acá.
+
+```typescript
+// src/users/users.controller.ts
+import { Controller, Get, Post, Contract } from '@kanjijs/platform-hono';
+import { Context } from 'hono';
+import { UsersService } from './users.service';
+import { CreateUserContract, GetUserContract } from './users.contracts';
+
+@Controller('/users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Post('/')
+  @Contract(CreateUserContract)
+  async create(c: Context) {
+    // Los datos ya están validados por el middleware @Contract
+    const body = c.get('kanji.validated.body');
+    const user = await this.usersService.create(body);
+    return c.json(user, 201);
+  }
+
+  @Get('/:id')
+  @Contract(GetUserContract)
+  async findById(c: Context) {
+    const { id } = c.get('kanji.validated.params');
+    const user = await this.usersService.findById(id);
+    return c.json(user);
+  }
+}
+```
+
+**Qué está pasando:**
+- `@Contract(CreateUserContract)` — Antes de que el handler se ejecute, Kanji valida el body contra el esquema Zod. Requests inválidos reciben una respuesta 400 automáticamente.
+- `c.get('kanji.validated.body')` — Accedé al body validado (y tipado).
+- `c.get('kanji.validated.params')` — Accedé a los parámetros URL validados.
+
+## 5. Ejecutar
+
+```bash
+kanji dev
+```
+
+Probá tu endpoint:
+
+```bash
+# Crear un usuario
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Juan", "email": "juan@ejemplo.com"}'
+
+# Respuesta: 201
+# {"id":"550e8400-e29b-41d4-a716-446655440000","name":"Juan","email":"juan@ejemplo.com"}
+
+# Obtener un usuario
+curl http://localhost:3000/users/550e8400-e29b-41d4-a716-446655440000
+
+# Request inválido (falta email)
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Juan"}'
+
+# Respuesta: 400
+# {"error":"VALIDATION_ERROR","issues":[{"path":"body.email","code":"invalid_type","message":"Required"}]}
+```
+
+## ¿Qué Pasó?
+
+1. Definiste un **contrato** (esquema Zod) que describe la forma de la API
+2. Implementaste un **servicio** con lógica de negocio y acceso a base de datos
+3. Conectaste un **controller** que conecta HTTP con el servicio
+4. Kanji manejó la validación, respuestas de error y routing automáticamente
+
+El mismo contrato generará tu spec OpenAPI y SDK TypeScript cuando ejecutes `kanji openapi:generate`.
+
+## ¿Qué sigue?
+
+- [Autenticación](/es/guides/authentication) — Agregá JWT y OAuth para proteger endpoints
+- [Base de Datos](/es/guides/database) — Conectá PostgreSQL o MongoDB
+- [Testing](/es/guides/testing) — Escribí tests unitarios y de integración
+- [OpenAPI & SDK](/es/guides/openapi-sdk) — Generá documentación de API y clientes tipados
