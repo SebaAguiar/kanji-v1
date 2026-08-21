@@ -11,6 +11,7 @@ export class DefaultConsoleLogger implements KanjiLogger {
 
   constructor() {
     const isTTY = typeof process !== 'undefined' && process.stdout?.isTTY;
+    // eslint-disable-next-line no-restricted-properties -- logger bootstrap reads NO_COLOR before app code runs
     const noColor = typeof process !== 'undefined' && process.env?.NO_COLOR !== undefined;
     this.useColor = !!isTTY && !noColor;
   }

@@ -21,6 +21,7 @@ export function registerOpenApiCommand(program: Command) {
 
       console.log(pc.cyan(`Bootstrapping application from ${options.entry} to scan routes...`));
 
+      // eslint-disable-next-line no-restricted-properties -- CLI codegen bootstrap flag
       process.env.KANJI_GENERATE_ONLY = 'true';
 
       try {

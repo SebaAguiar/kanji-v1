@@ -185,7 +185,7 @@ export class SdkGenerator {
         methodArgs.push(`options?: { headers?: Record<string, string> }`);
 
         // Format URL path with template strings for path parameters
-        let jsPath = path.replace(/\{([a-zA-Z0-9_]+)\}/g, '${$1}');
+        const jsPath = path.replace(/\{([a-zA-Z0-9_]+)\}/g, '${$1}');
 
         const methodLines: string[] = [];
         if (op.deprecated) {

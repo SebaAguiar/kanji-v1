@@ -21,6 +21,7 @@ export function env<T extends z.ZodTypeAny>(key: string, schema: T): z.infer<T> 
     return cache.get(key) as z.infer<T>;
   }
 
+  // eslint-disable-next-line no-restricted-properties -- implementation of the sanctioned env() accessor
   const result = schema.safeParse(process.env[key]);
   if (!result.success) {
     errors.push(`${key}: ${result.error.issues.map((i) => i.message).join(', ')}`);

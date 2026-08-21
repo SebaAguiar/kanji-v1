@@ -92,6 +92,7 @@ export function registerEnvCommand(program: Command) {
       }
 
       // Prevenir inicialización de base de datos o servidores HTTP durante la carga
+      // eslint-disable-next-line no-restricted-properties -- CLI codegen bootstrap flag
       process.env.KANJI_GENERATE_ONLY = 'true';
 
       try {
@@ -148,6 +149,7 @@ export function registerEnvCommand(program: Command) {
       let validationFailed = false;
 
       for (const [key, schema] of registeredEnvs.entries()) {
+        // eslint-disable-next-line no-restricted-properties -- CLI validates registered env schemas against real process state
         const value = process.env[key];
         const isOptional = schema.safeParse(undefined).success;
 

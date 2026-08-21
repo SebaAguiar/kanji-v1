@@ -2,9 +2,9 @@ import { describe, it, expect, spyOn, afterEach } from 'bun:test';
 import { DefaultConsoleLogger } from '../logger.js';
 
 describe('DefaultConsoleLogger', () => {
-  let logSpy = spyOn(console, 'log').mockImplementation(() => {});
-  let warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
-  let errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+  const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+  const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+  const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
   afterEach(() => {
     logSpy.mockClear();

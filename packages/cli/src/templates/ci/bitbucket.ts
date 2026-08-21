@@ -5,7 +5,7 @@ export function getBitbucketPipelinesTemplate(opts: ProjectOptions): string {
   const installCmd = pm === 'bun' ? 'bun install' : `${pm} install`;
   const image = pm === 'bun' ? 'oven/bun:1' : 'node:22';
 
-  let scriptSteps = [`- ${installCmd}`];
+  const scriptSteps = [`- ${installCmd}`];
   if (opts.tests !== false) {
     scriptSteps.push(pm === 'bun' ? `- bun test` : `- ${pm} test`);
   }

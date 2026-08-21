@@ -8,6 +8,7 @@ describe('CLI env:check Command', () => {
   let tmpProjectDir: string;
   const isDist = __dirname.includes('dist');
   const cliPath = join(__dirname, isDist ? '../cli.js' : '../cli.ts');
+  const monorepoRoot = join(__dirname, isDist ? '../../../../..' : '../../../..');
 
   beforeAll(async () => {
     // Crear directorio temporal para el proyecto de prueba
@@ -22,14 +23,14 @@ describe('CLI env:check Command', () => {
 
     // Linkear zod para resolver la dependencia del test
     await symlink(
-      join(process.cwd(), 'node_modules', 'zod'),
+      join(monorepoRoot, 'node_modules', 'zod'),
       join(targetNodeModules, 'zod'),
       'dir',
     );
 
     // Linkear @kanjijs/common de forma absoluta para evitar rutas relativas de pnpm rotas
     await symlink(
-      join(process.cwd(), 'packages', 'common'),
+      join(monorepoRoot, 'packages', 'common'),
       join(targetKanjijsDir, 'common'),
       'dir',
     );

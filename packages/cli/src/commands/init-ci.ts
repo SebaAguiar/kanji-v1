@@ -137,7 +137,7 @@ export function registerInitCiCommand(program: Command) {
 
         console.log(pc.bold(pc.green(`\nCI/CD pipeline for "${platform}" successfully initialized! 🚀`)));
         printNextSteps('ci', platform, {
-          ciPlatform: platform as any,
+          ciPlatform: platform as 'github' | 'gitlab',
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

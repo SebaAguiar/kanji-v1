@@ -5,7 +5,7 @@ export function getCircleCIConfigTemplate(opts: ProjectOptions): string {
   const installCmd = pm === 'bun' ? 'bun install' : `${pm} install`;
   const image = pm === 'bun' ? 'oven/bun:1' : 'cimg/node:22.0';
 
-  let steps = [
+  const steps = [
     `      - checkout`,
     `      - run:`,
     `          name: Install dependencies`,
