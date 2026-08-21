@@ -1,3 +1,4 @@
+import type { ClassConstructor } from '@kanjijs/common';
 import type { Context, Next, MiddlewareHandler } from 'hono';
 import { KANJI_CTX, HttpMetadataStorage } from '@kanjijs/platform-hono';
 import type { ClassLevelPermissions, ClpPermissionRule, AclOptions } from './policy.js';
@@ -185,16 +186,15 @@ export function acl(options: AclOptions): MiddlewareHandler {
 
 export function UseGuards(
   ...guards: MiddlewareHandler[]
-): (target: object | Function, propertyKey?: string | symbol) => void {
-  return (target: object | Function, propertyKey?: string | symbol): void => {
+): (target: object | ClassConstructor, propertyKey?: string | symbol) => void {
+  return (target: object | ClassConstructor, propertyKey?: string | symbol): void => {
     if (propertyKey) {
       HttpMetadataStorage.getInstance().registerRouteMiddleware(
-        target.constructor,
-        propertyKey,
+        target.constructor as ClassConstructor,        propertyKey,
         guards,
       );
     } else {
-      HttpMetadataStorage.getInstance().registerControllerMiddleware(target as Function, guards);
+      HttpMetadataStorage.getInstance().registerControllerMiddleware(target as ClassConstructor, guards);
     }
   };
 }

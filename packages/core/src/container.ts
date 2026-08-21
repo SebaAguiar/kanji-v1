@@ -407,8 +407,10 @@ export class Container {
     }
     const instancesArray = Array.from(this.instances.values()).reverse();
     for (const instance of instancesArray) {
-      if (instance && typeof (instance as any).onDestroy === 'function') {
-        await (instance as any).onDestroy();
+      if (!instance) continue;
+      const hookable = instance as Partial<Record<'onDestroy', () => void | Promise<void>>>;
+      if (typeof hookable.onDestroy === 'function') {
+        await hookable.onDestroy();
       }
     }
   }
@@ -418,8 +420,10 @@ export class Container {
       this.logger.log(`Executing ${hook} lifecycle hooks...`, 'InstanceLoader');
     }
     for (const [, instance] of this.instances) {
-      if (instance && typeof (instance as any)[hook] === 'function') {
-        await (instance as any)[hook]();
+      if (!instance) continue;
+      const hookable = instance as Partial<Record<typeof hook, () => void | Promise<void>>>;
+      if (typeof hookable[hook] === 'function') {
+        await hookable[hook]?.();
       }
     }
   }

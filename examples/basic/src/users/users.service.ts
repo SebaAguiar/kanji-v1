@@ -29,7 +29,7 @@ export class UsersService {
 
   async findAll() {
     const results = await this.db.query.users.select();
-    return results.map((r: any) => ({
+    return results.map((r) => ({
       ...r,
       status: 'active' as const,
       createdAt: new Date(),

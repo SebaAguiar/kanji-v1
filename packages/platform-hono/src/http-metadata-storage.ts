@@ -1,3 +1,4 @@
+import type { ClassConstructor } from '@kanjijs/common';
 import type { MiddlewareHandler } from 'hono';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'options' | 'head';
@@ -11,9 +12,9 @@ export interface RouteMetadata {
 export class HttpMetadataStorage {
   private static instance: HttpMetadataStorage;
 
-  public readonly controllers = new Map<Function, string>();
-  public readonly routes = new Map<Function, RouteMetadata[]>();
-  public readonly controllerMiddlewares = new Map<Function, MiddlewareHandler[]>();
+  public readonly controllers = new Map<ClassConstructor, string>();
+  public readonly routes = new Map<ClassConstructor, RouteMetadata[]>();
+  public readonly controllerMiddlewares = new Map<ClassConstructor, MiddlewareHandler[]>();
   public readonly routeMiddlewares = new Map<string, MiddlewareHandler[]>();
 
   private constructor() {}
@@ -25,24 +26,24 @@ export class HttpMetadataStorage {
     return HttpMetadataStorage.instance;
   }
 
-  public registerController(target: Function, path: string): void {
+  public registerController(target: ClassConstructor, path: string): void {
     this.controllers.set(target, path);
   }
 
-  public registerRoute(target: Function, route: RouteMetadata): void {
+  public registerRoute(target: ClassConstructor, route: RouteMetadata): void {
     const list = this.routes.get(target) || [];
     list.push(route);
     this.routes.set(target, list);
   }
 
-  public registerControllerMiddleware(target: Function, middlewares: MiddlewareHandler[]): void {
+  public registerControllerMiddleware(target: ClassConstructor, middlewares: MiddlewareHandler[]): void {
     const list = this.controllerMiddlewares.get(target) || [];
     list.push(...middlewares);
     this.controllerMiddlewares.set(target, list);
   }
 
   public registerRouteMiddleware(
-    target: Function,
+    target: ClassConstructor,
     propertyKey: string | symbol,
     middlewares: MiddlewareHandler[],
   ): void {

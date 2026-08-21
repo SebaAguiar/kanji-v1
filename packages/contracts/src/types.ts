@@ -19,3 +19,5 @@ export interface WebSocketContract {
 }
 
 export type KanjiContractUnion = KanjiContract | WebSocketContract;
+
+export type ContractClass = abstract new (...args: never[]) => unknown;

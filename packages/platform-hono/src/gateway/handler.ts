@@ -1,14 +1,17 @@
+import type { ClassConstructor } from '@kanjijs/common';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { KanjiLogger } from '@kanjijs/common';
 import { WsMetadataStorage } from './ws-metadata-storage.js';
 import { WebSocketContext } from './ws-context.js';
 
+export type WsInstance = Record<string | symbol, (...args: unknown[]) => unknown>;
+
 export class WsGatewayHandler {
   constructor(private readonly logger?: KanjiLogger) {}
 
   createUpgradeHandler(
-    instance: Record<string | symbol, Function>,
-    gatewayClass: Function,
+      instance: WsInstance,
+    gatewayClass: ClassConstructor,
   ): MiddlewareHandler {
     const ws = WsMetadataStorage.getInstance();
     const messageHandlers = ws.messageHandlers.get(gatewayClass) || [];
@@ -22,8 +25,6 @@ export class WsGatewayHandler {
       messageMap.set(mh.event, mh.propertyKey);
     }
 
-    const self = this;
-
     // Lazy import hono/bun for the upgradeWebSocket helper
     let upgradeHandler: MiddlewareHandler | null = null;
 
@@ -32,7 +33,7 @@ export class WsGatewayHandler {
         const { upgradeWebSocket } = await import('hono/bun');
 
         upgradeHandler = upgradeWebSocket((c) => ({
-          onOpen(_evt, wsRaw) {
+          onOpen: (_evt, wsRaw) => {
             if (!connectHandler) return;
             const ctx = new WebSocketContext(c, wsRaw);
             const method = instance[connectHandler.propertyKey];
@@ -41,7 +42,7 @@ export class WsGatewayHandler {
             }
           },
 
-          onMessage(evt, wsRaw) {
+          onMessage: (evt, wsRaw) => {
             let parsed: Record<string, unknown> | null = null;
             try {
               const rawData = JSON.parse(evt.data as string);
@@ -110,10 +111,10 @@ export class WsGatewayHandler {
               ctx = new WebSocketContext(c, wsRaw);
             }
 
-            self.invokeHandler(instance, propertyKey, ctx, wsRaw);
+            this.invokeHandler(instance, propertyKey, ctx, wsRaw);
           },
 
-          onClose(_evt, wsRaw) {
+          onClose: (_evt, wsRaw) => {
             if (!disconnectHandler) return;
             const ctx = new WebSocketContext(c, wsRaw);
             const method = instance[disconnectHandler.propertyKey];
@@ -122,7 +123,7 @@ export class WsGatewayHandler {
             }
           },
 
-          onError(_evt, wsRaw) {
+          onError: (_evt, wsRaw) => {
             if (!errorHandler) return;
             const ctx = new WebSocketContext(c, wsRaw);
             const method = instance[errorHandler.propertyKey];
@@ -138,7 +139,7 @@ export class WsGatewayHandler {
   }
 
   private invokeHandler(
-    instance: Record<string | symbol, Function>,
+      instance: WsInstance,
     propertyKey: string | symbol,
     ctx: WebSocketContext,
     ws: { send: (data: string) => void },

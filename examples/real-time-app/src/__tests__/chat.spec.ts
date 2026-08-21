@@ -56,19 +56,18 @@ function createWsClient(url: string) {
       if (existing) return Promise.resolve(existing);
 
       return new Promise((resolve, reject) => {
-        let timer: any;
+        const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+          listeners.delete(handler);
+          reject(new Error(`Timeout waiting for event matching predicate`));
+        }, timeoutMs);
         const handler = (msg: { event: string; data: unknown }) => {
           if (predicate(msg)) {
             listeners.delete(handler);
-            if (timer) clearTimeout(timer);
+            clearTimeout(timer);
             resolve(msg);
           }
         };
         listeners.add(handler);
-        timer = setTimeout(() => {
-          listeners.delete(handler);
-          reject(new Error(`Timeout waiting for event matching predicate`));
-        }, timeoutMs);
       });
     },
     close() {

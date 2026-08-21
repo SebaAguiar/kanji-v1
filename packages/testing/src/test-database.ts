@@ -46,7 +46,7 @@ class MockQueryBuilder implements QueryBuilder<Record<string, DatabaseValue>> {
   }
 
   async findById(id: string | number): Promise<Record<string, DatabaseValue> | null> {
-    return this.data.find((item) => item.id === id || (item as any).id === id) ?? null;
+    return this.data.find((item) => item.id === id) ?? null;
   }
 
   async findBy(

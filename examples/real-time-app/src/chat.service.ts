@@ -2,7 +2,7 @@ import { Injectable } from '@kanjijs/core';
 import { WebSocketContext } from '@kanjijs/platform-hono';
 
 interface RoomMember {
-  ctx: WebSocketContext<any>;
+  ctx: WebSocketContext<Record<string, unknown>>;
   userId: string;
   name: string;
 }
@@ -20,7 +20,7 @@ export class ChatService {
     return Array.from(this.rooms.keys());
   }
 
-  joinRoom(roomName: string, ctx: WebSocketContext<any>, userId: string, userName: string): void {
+  joinRoom(roomName: string, ctx: WebSocketContext<Record<string, unknown>>, userId: string, userName: string): void {
     let room = this.rooms.get(roomName);
     if (!room) {
       room = { name: roomName, members: new Map() };

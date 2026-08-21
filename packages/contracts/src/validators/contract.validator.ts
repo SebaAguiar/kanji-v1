@@ -1,3 +1,4 @@
+import type { ContractClass } from '../types.js';
 import 'reflect-metadata';
 import { ValidationSeverity, type ValidationResult } from '../validation.js';
 import { getRegisteredContractActions } from '../decorators/contract.js';
@@ -10,7 +11,7 @@ interface HttpRouteMeta {
 
 export class ContractValidator {
   public static validate(
-    controller: Function,
+    controller: ContractClass,
     declaredContract: Record<string, KanjiContract> | null,
   ): ValidationResult[] {
     const results: ValidationResult[] = [];

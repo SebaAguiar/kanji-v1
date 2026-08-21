@@ -1,3 +1,4 @@
+import type { ContractClass } from '../types.js';
 import 'reflect-metadata';
 import type { KanjiContractUnion } from '../types.js';
 import { captureLocation } from '../validation.js';
@@ -13,7 +14,7 @@ export function Contract(schema: KanjiContractUnion): MethodDecorator {
   };
 }
 
-export function getRegisteredContractActions(controllerClass: Function): Set<string> {
+export function getRegisteredContractActions(controllerClass: ContractClass): Set<string> {
   const prototype = controllerClass.prototype;
   const methods = Object.getOwnPropertyNames(prototype).filter(
     (name) => name !== 'constructor' && typeof prototype[name] === 'function',

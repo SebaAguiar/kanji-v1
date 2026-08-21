@@ -20,13 +20,13 @@ export class ProductRepository {
 
   async findAll(): Promise<ProductResponse[]> {
     const results = await this.db.query.products.select();
-    return results as any as ProductResponse[];
+    return results as ProductResponse[];
   }
 
   async findOne(id: string): Promise<ProductResponse | null> {
     const result = await this.db.query.products.select();
-    const found = result.find((item: any) => item.id === id);
-    return found ? (found as any as ProductResponse) : null;
+    const found = result.find((item) => item.id === id);
+    return found ? (found as ProductResponse) : null;
   }
 
   async update(id: string, input: Partial<CreateProductInput>): Promise<ProductResponse> {

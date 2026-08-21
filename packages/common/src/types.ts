@@ -4,6 +4,8 @@ export interface Constructor<T = object> {
 
 export type Token<T = object> = Constructor<T> | symbol | string;
 
+export type ClassConstructor = abstract new (...args: never[]) => unknown;
+
 export type DeepPartial<T> = T extends Builtin
   ? T
   : T extends Map<infer K, infer V>
@@ -24,10 +26,10 @@ export type DeepPartial<T> = T extends Builtin
                   : Array<DeepPartial<U>>
                 : T extends Promise<infer U>
                   ? Promise<DeepPartial<U>>
-                  : T extends {}
+                  : T extends object
                     ? { [K in keyof T]?: DeepPartial<T[K]> }
                     : Partial<T>;
 
-type Builtin = Function | Date | Error | RegExp;
+type Builtin = ClassConstructor | Date | Error | RegExp;
 
-type IsTuple<T> = T extends readonly any[] ? (number extends T['length'] ? never : T) : never;
+type IsTuple<T> = T extends readonly unknown[] ? (number extends T['length'] ? never : T) : never;

@@ -1,6 +1,7 @@
 import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
 import { Container, type Constructor } from '@kanjijs/core';
 import { HttpMetadataStorage } from './http-metadata-storage.js';
+import type { WsInstance } from './gateway/handler.js';
 import type { KanjijsAdapterOptions } from './types.js';
 import {
   KanjiLogger,
@@ -281,10 +282,7 @@ export class KanjijsAdapter {
           activeLogger.log(`${gateway.name} {${wsPath}}`, 'WsGatewayResolver');
         }
 
-        const instance = (await container.resolve(gateway, moduleClass)) as Record<
-          string | symbol,
-          Function
-        >;
+        const instance = (await container.resolve(gateway, moduleClass)) as WsInstance;
         const upgradeHandler = wsHandler.createUpgradeHandler(instance, gateway);
 
         // Apply controller-level middlewares before upgrade:
