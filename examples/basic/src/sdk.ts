@@ -42,7 +42,6 @@ export interface GetUsersResponse {
   /** Timestamp when the user was created */
   createdAt?: string;
 }
-[];
 
 export interface PostProductsBody {
   name: string;
@@ -57,7 +56,6 @@ export interface GetProductsResponse {
   id: string;
   name: string;
 }
-[];
 
 export interface GetProductsByIdResponse {
   id: string;
