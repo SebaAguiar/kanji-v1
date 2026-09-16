@@ -72,7 +72,7 @@ export default defineConfig({
 			defaultLocale: 'root',
 			lastUpdated: true,
 			editLink: {
-				base: 'https://github.com/your-org/kanji-v1/edit/main/kanji-docs/',
+				base: 'https://github.com/SebaAguiar/kanji-v1/edit/main/kanji-docs/',
 			},
 			pagefind: true,
 			customCss: [],
