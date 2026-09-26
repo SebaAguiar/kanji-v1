@@ -9,6 +9,7 @@
     "start": "bun src/main.ts"
   },
   "dependencies": {
+    "@kanjijs/common": "workspace:*",
     "@kanjijs/core": "workspace:*",
     "@kanjijs/platform-hono": "workspace:*",
     "@kanjijs/contracts": "workspace:*",

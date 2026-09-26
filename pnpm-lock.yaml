@@ -53,6 +53,9 @@ importers:
       '@kanjijs/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../../packages/common
       '@kanjijs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -105,6 +108,9 @@ importers:
       '@kanjijs/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../../packages/common
       '@kanjijs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -142,6 +148,9 @@ importers:
       '@kanjijs/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../../packages/common
       '@kanjijs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -191,6 +200,9 @@ importers:
 
   examples/starter:
     dependencies:
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../../packages/common
       '@kanjijs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -219,6 +231,9 @@ importers:
 
   packages/auth:
     dependencies:
+      '@kanjijs/common':
+        specifier: workspace:*
+        version: link:../common
       hono:
         specifier: ^4.12.27
         version: 4.12.27
