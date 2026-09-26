@@ -16,9 +16,9 @@ export class StoreModule {
         {
           provide: DATABASE_CLIENT,
           useFactory: () => {
-            if (config.type === 'postgres') {
+              if (config.type === 'postgres') {
               const schema = (config.schema || {}) as Record<string, Table>;
-              return new PostgresDatabase(config.connectionString, schema);
+              return new PostgresDatabase(config.connectionString, schema, config.casing);
             } else if (config.type === 'mongodb') {
               return new MongoDatabase(config.connectionString, config.dbName);
             }

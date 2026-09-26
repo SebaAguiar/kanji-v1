@@ -1,14 +1,17 @@
 export type DatabaseValue = string | number | boolean | null | Date;
 
-export interface QueryBuilder<T = Record<string, DatabaseValue>> {
+/** A single database row: column names mapped to scalar values. */
+export type DatabaseRow = Record<string, DatabaseValue>;
+
+export interface QueryBuilder<T = DatabaseRow> {
   select(fields?: string[]): this;
   where(conditions: Record<string, DatabaseValue>): this;
   limit(n: number): this;
   offset(n: number): this;
   orderBy(field: string, direction?: 'asc' | 'desc'): this;
 
-  insert(data: Record<string, DatabaseValue> | Record<string, DatabaseValue>[]): this;
-  update(data: Record<string, DatabaseValue>): this;
+  insert(data: DatabaseRow | DatabaseRow[]): this;
+  update(data: DatabaseRow): this;
   delete(): this;
 
   /** Find a single record by its primary key (id). Resolves to the record or null. */
@@ -26,14 +29,14 @@ export interface QueryBuilder<T = Record<string, DatabaseValue>> {
 export interface Database {
   // Proxy dynamically resolves any table name to a generic QueryBuilder
   query: {
-    [table: string]: QueryBuilder<Record<string, DatabaseValue>>;
+    [table: string]: QueryBuilder<DatabaseRow>;
   };
 
   // Unified transaction support
   transaction<T>(fn: (trx: Database) => Promise<T>): Promise<T>;
 
   // Safe raw queries
-  raw(query: string, params?: DatabaseValue[]): Promise<Record<string, DatabaseValue>[]>;
+  raw(query: string, params?: DatabaseValue[]): Promise<DatabaseRow[]>;
 
   // Close connection
   disconnect(): Promise<void>;
@@ -45,6 +48,7 @@ export interface PostgresStoreConfig {
   type: 'postgres';
   connectionString: string;
   schema?: Record<string, object>;
+  casing?: 'snake_case' | 'camelCase';
 }
 
 export interface MongoStoreConfig {

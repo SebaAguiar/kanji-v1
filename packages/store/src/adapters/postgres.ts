@@ -206,10 +206,16 @@ export class PostgresDatabase implements Database {
   private client: ReturnType<typeof postgres>;
   private schema: Record<string, Table>;
 
-  constructor(connectionString: string, schema: Record<string, Table> = {}) {
+  constructor(
+    connectionString: string,
+    schema: Record<string, Table> = {},
+    casing?: 'snake_case' | 'camelCase',
+  ) {
     this.client = postgres(connectionString);
     this.schema = schema;
-    this.db = drizzle(this.client);
+    this.db = casing
+      ? (drizzle(this.client, { casing }) as PostgresJsDatabase<Record<string, never>>)
+      : drizzle(this.client);
   }
 
   get query() {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import type { Database, DatabaseValue } from '@kanjijs/store';
+import type { Database, DatabaseRow } from '@kanjijs/store';
 import { OfflineSyncManager } from '../sync-manager.js';
 import type { OfflineChange } from '../types.js';
 
@@ -7,27 +7,26 @@ import type { OfflineChange } from '../types.js';
  * Crea un mock de Database que usa un Map en memoria compartido.
  * Soportes transacciones reales (misma instancia).
  */
-function createInMemoryDb(): Database & { store: Map<string, Map<string, DatabaseValue[]>> } {
-  const store = new Map<string, Map<string, DatabaseValue[]>>();
+function createInMemoryDb(): Database & { store: Map<string, Map<string, DatabaseRow[]>> } {
+  const store = new Map<string, Map<string, DatabaseRow[]>>();
 
-  function getTable(table: string): Map<string, DatabaseValue[]> {
+  function getTable(table: string): Map<string, DatabaseRow[]> {
     if (!store.has(table)) {
       store.set(table, new Map());
     }
     return store.get(table)!;
   }
 
-  const db: Database & { store: Map<string, Map<string, DatabaseValue[]>> } = {
+  const db: Database & { store: Map<string, Map<string, DatabaseRow[]>> } = {
     query: new Proxy({} as Database['query'], {
       get(_target, prop: string) {
         const tableName = prop;
 
         const builder = {
-          _where: {} as Record<string, DatabaseValue>,
-          _data: [] as DatabaseValue[],
+          _where: {} as Record<string, import('@kanjijs/store').DatabaseValue>,
 
           select() { return this; },
-          where(conditions: Record<string, DatabaseValue>) {
+          where(conditions: Record<string, import('@kanjijs/store').DatabaseValue>) {
             this._where = conditions;
             return this;
           },
@@ -35,12 +34,11 @@ function createInMemoryDb(): Database & { store: Map<string, Map<string, Databas
           offset() { return this; },
           orderBy() { return this; },
 
-          insert(data: DatabaseValue | DatabaseValue[]) {
+          insert(data: DatabaseRow | DatabaseRow[]) {
             const arr = Array.isArray(data) ? data : [data];
             const rows = getTable(tableName);
             for (const item of arr) {
-              const rec = item as Record<string, DatabaseValue>;
-              const id = String(rec.id ?? rec.resource_id ?? rows.size + 1);
+              const id = String(item.id ?? item.resource_id ?? rows.size + 1);
               if (!rows.has(id)) {
                 rows.set(id, []);
               }
@@ -49,13 +47,13 @@ function createInMemoryDb(): Database & { store: Map<string, Map<string, Databas
             return this;
           },
 
-          update(data: DatabaseValue) {
+          update(data: DatabaseRow) {
             const where = this._where;
             const id = String(where.id ?? '');
             const rows = getTable(tableName);
             if (id && rows.has(id)) {
               const existing = rows.get(id)!;
-              rows.set(id, existing.map((r: DatabaseValue) => ({ ...(r as object), ...(data as object) } as DatabaseValue)));
+              rows.set(id, existing.map((r) => ({ ...r, ...data })));
             }
             return this;
           },
@@ -67,8 +65,8 @@ function createInMemoryDb(): Database & { store: Map<string, Map<string, Databas
             return this;
           },
 
-          async then<TResult1 = DatabaseValue[], TResult2 = never>(
-            onfulfilled?: ((value: DatabaseValue[]) => TResult1 | PromiseLike<TResult1>) | null,
+          async then<TResult1 = DatabaseRow[], TResult2 = never>(
+            onfulfilled?: ((value: DatabaseRow[]) => TResult1 | PromiseLike<TResult1>) | null,
           ): Promise<TResult1 | TResult2> {
             const where = this._where;
             const rows = getTable(tableName);
@@ -79,16 +77,15 @@ function createInMemoryDb(): Database & { store: Map<string, Map<string, Databas
             // otherwise fall back to id
             const lookupKey = resourceId || id;
 
-            let result: DatabaseValue[] = [];
+            let result: DatabaseRow[] = [];
             if (lookupKey) {
               const row = rows.get(lookupKey);
               if (row) {
                 // If there are additional where conditions, filter
                 if (Object.keys(where).length > 1) {
                   result = row.filter((r) => {
-                    const rec = r as Record<string, DatabaseValue>;
                     for (const [key, val] of Object.entries(where)) {
-                      if (rec[key] !== val) return false;
+                      if (r[key] !== val) return false;
                     }
                     return true;
                   });

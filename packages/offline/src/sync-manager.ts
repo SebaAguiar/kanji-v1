@@ -8,10 +8,11 @@ import type {
 
 const SYNC_VERSIONS_TABLE = '_sync_versions';
 
-interface SyncVersionRow {
-  resource_id: string;
-  table_name: string;
-  version: number;
+function rowNumber(row: Record<string, DatabaseValue>, key: string): number {
+  const value = row[key];
+  if (typeof value === 'number') return value;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 export class OfflineSyncManager {
@@ -211,7 +212,7 @@ export class OfflineSyncManager {
       const rows = await this.db.query[table]
         .where({ id })
         .limit(1);
-      return rows.length > 0 ? (rows[0] as Record<string, DatabaseValue>) : null;
+      return rows.length > 0 ? rows[0] : null;
     } catch {
       return null;
     }
@@ -226,7 +227,7 @@ export class OfflineSyncManager {
         .where({ resource_id: resourceId, table_name: table })
         .limit(1);
       if (rows.length > 0) {
-        return (rows[0] as SyncVersionRow).version;
+        return rowNumber(rows[0], 'version');
       }
       return undefined;
     } catch {
@@ -271,7 +272,7 @@ export class OfflineSyncManager {
 
     if (existing.length > 0) {
       await trx.query[SYNC_VERSIONS_TABLE]
-        .update({ version: (existing[0] as SyncVersionRow).version + 1 })
+        .update({ version: rowNumber(existing[0], 'version') + 1 })
         .where({ resource_id: resourceId, table_name: table });
     } else {
       await trx.query[SYNC_VERSIONS_TABLE].insert({
