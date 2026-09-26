@@ -1,0 +1,16 @@
+# Default owner for everything
+* @tu-usuario-de-github
+
+# Core packages — require your review
+/packages/core/ @tu-usuario-de-github
+/packages/platform-hono/ @tu-usuario-de-github
+/packages/contracts/ @tu-usuario-de-github
+/packages/store/ @tu-usuario-de-github
+/packages/auth/ @tu-usuario-de-github
+/packages/openapi/ @tu-usuario-de-github
+/packages/testing/ @tu-usuario-de-github
+/packages/cli/ @tu-usuario-de-github
+/packages/common/ @tu-usuario-de-github
+
+# CI/CD changes
+/.github/ @tu-usuario-de-github

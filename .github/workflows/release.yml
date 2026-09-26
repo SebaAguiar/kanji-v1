@@ -1,98 +1,36 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version bump type or explicit version'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-
-env:
-  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  push:
+    tags: ['v*']
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-
-      - name: Enable corepack & pnpm
-        run: corepack enable && corepack prepare pnpm@10.28.0 --activate
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install pnpm
+        run: npm install -g pnpm@10.28.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Bump versions
-        id: bump
-        run: |
-          bun run scripts/bump-versions.ts -- ${{ inputs.version }}
-          NEW_VERSION=$(node -e "console.log(require('./packages/common/package.json').version)")
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Update lockfile
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Build
-        run: pnpm build
+      - name: Build all packages
+        run: pnpm -r build
 
       - name: Test
         run: pnpm test:ci
 
-      - name: Publish packages (topological order)
+      - name: Publish to npm
         run: |
-          # Publish order: deps first, consumers last
-          PUBLISH_ORDER=(
-            "packages/common"
-            "packages/core"
-            "packages/contracts"
-            "packages/platform-hono"
-            "packages/store"
-            "packages/auth"
-            "packages/openapi"
-            "packages/testing"
-            "packages/cli"
-          )
-
-          for dir in "${PUBLISH_ORDER[@]}"; do
-            echo "Publishing $dir..."
-            pnpm publish "$dir" --access public --no-git-checks
-          done
-
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add packages/*/package.json pnpm-lock.yaml
-          git commit -m "chore(release): bump to v${{ steps.bump.outputs.new_version }}"
-          git tag "v${{ steps.bump.outputs.new_version }}"
-          git push --follow-tags
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          pnpm -r publish --access public --no-git-checks
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
